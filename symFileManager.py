@@ -1,4 +1,4 @@
-from symLogging import LogDebug, LogMessage
+from symLogging import LogDebug, LogError, LogMessage
 from symFetcher import PathFetcher, URLFetcher
 from symCache import MemoryCache, DiskCache
 
@@ -22,6 +22,7 @@ class SymFileManager:
     self.memoryCache.LoadCacheEntries(self.MRU, self.diskCache)
 
     LogMessage("MRU loaded with {} entries".format(len(self.MRU)))
+    LogMessage("Server is ready")
 
   def GetLibSymbolMap(self, lib):
     try:

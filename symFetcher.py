@@ -4,7 +4,7 @@ import urlparse
 import contextlib
 import gzip
 from StringIO import StringIO
-from symLogging import LogDebug, LogMessage
+from symLogging import LogDebug, LogError, LogMessage
 from symParser import ParseSymbolFile
 from symUtil import GetSymbolFileName
 

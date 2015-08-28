@@ -1,6 +1,6 @@
 import os
 import cPickle as pickle
-from symLogging import LogDebug
+from symLogging import LogDebug, LogMessage, LogError
 from symUtil import mkdir_p
 
 class Cache(object):
@@ -38,8 +38,16 @@ class MemoryCache(Cache):
     return self.sCache.get(lib)
 
   def LoadCacheEntries(self, MRU, diskCache):
+    LogMessage("Initializing memory cache from disk cache")
     for lib in MRU[:self.MAX_SIZE]:
-      self.sCache[lib] = diskCache.Get(lib)
+      LogDebug("Loading library " + str(lib))
+      cachedLib = diskCache.Get(lib)
+      if cachedLib:
+	self.sCache[lib] = diskCache.Get(lib)
+      else:
+        # this is safe, iterating over a "copy" of the MRU because of slice operator
+        MRU.remove(lib)
+    LogMessage("Finished initializing memory cache from disk cache")
 
 class DiskCache(Cache):
   def __init__(self, options):
@@ -68,8 +76,15 @@ class DiskCache(Cache):
     try:
       with open(path, 'rb') as f:
         symbolInfo = pickle.load(f)
-    except (IOError, pickle.PickleError) as ex:
-      LogDebug("Could not load pickled lib [{}] [{}]: {}".format(lib[0], lib[1], ex))
+    except (IOError, EOFError, pickle.PickleError) as ex:
+      LogError("Could not load pickled lib {}: {}".format(path, ex))
+      try:
+        os.remove(path)
+        LogMessage("Removed unreadable pickled lib {}".format(path))
+      except Exception as ex2:
+        LogError("Could not remove unreadable pickled file {}: {}".format(path, ex2))
+    except Exception as ex:
+      LogError("Unexpected error loading pickled lib[{}]: {}".format(path, ex))
 
     return symbolInfo
 

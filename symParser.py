@@ -1,5 +1,5 @@
 from bisect import bisect
-from symLogging import LogDebug, LogError
+from symLogging import LogDebug, LogError, LogMessage
 
 class SymbolInfo:
   def __init__(self, addressMap):

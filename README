@@ -7,9 +7,23 @@ If you're interested in setting up local symbols for use with the Gecko profiler
 
 https://developer.mozilla.org/en/Performance/Profiling_with_the_Built-in_Profiler_and_Local_Symbols_on_Windows
 
+REQUIREMENTS
+============
+* Python 2.7
+* pip and virtualenv
+
 BASICS
 ===========
-1. The sample.ini file in this directory contains a sample configuration. To run the server locally, you will have to edit the paths to point to your local symbol dirs. Everything else should be OK to leave unchanged.
+Configuration and installation:
+
+1. The "sample-linux.ini" and "sample-windows.ini" files in this directory contain a sample configuration. To run the server locally, you will have to edit the paths to point to your local symbol dirs. Everything else should be OK to leave unchanged.
+2. Create a virtual environment with "virtualenv venv"
+3. Activate virtual environment with "source venv/bin/activate"
+4. Install requirements with "pip install -r requirements.txt"
+
+Run the server:
+
+1. Activate virtual environment if it isn't already active with "source venv/bin/activate"
 2. Run the server with "python symbolicationWebService.py sample.ini"
 3. To stop the server send it a kill signal or Ctrl-C
 

@@ -5,9 +5,9 @@ import json
 import urllib2
 
 # Precompiled regex for validating lib names
-gLibNameRE = re.compile("[0-9a-zA-Z_+\-\.]*$") # Empty lib name means client couldn't associate frame with any lib
-gPdbSigRE = re.compile("{([0-9a-fA-F]{8})-([0-9a-fA-F]{4})-([0-9a-fA-F]{4})-([0-9a-fA-F]{4})-([0-9a-fA-F]{12})}$")
-gPdbSigRE2 = re.compile("[0-9a-fA-F]{32}$")
+gLibNameRE = re.compile("^[0-9a-zA-Z_+\-\.]*$") # Empty lib name means client couldn't associate frame with any lib
+gPdbSigRE = re.compile("^{([0-9a-fA-F]{8})-([0-9a-fA-F]{4})-([0-9a-fA-F]{4})-([0-9a-fA-F]{4})-([0-9a-fA-F]{12})}$")
+gPdbSigRE2 = re.compile("^[0-9a-fA-F]{32}$")
 
 # Maximum number of times a request can be forwarded to a different server
 # for symbolication. Also prevents loops.

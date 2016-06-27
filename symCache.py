@@ -1,5 +1,6 @@
 import os
 import cPickle as pickle
+import bz2
 from symLogging import LogDebug, LogMessage, LogError
 from symUtil import mkdir_p
 
@@ -74,7 +75,7 @@ class DiskCache(Cache):
     symbolInfo = None
 
     try:
-      with open(path, 'rb') as f:
+      with bz2.BZ2File(path, 'rb') as f:
         symbolInfo = pickle.load(f)
     except (IOError, EOFError, pickle.PickleError) as ex:
       LogError("Could not load pickled lib {}: {}".format(path, ex))
@@ -102,14 +103,13 @@ class DiskCache(Cache):
 
         # Get the libName and breakpadId components of the path
         breakpadId, libName = filePath.split("@")
-
         fileList.append((libName, breakpadId))
 
     return fileList
 
   def Store(self, symbolInfo, libName, breakpadId):
     path = self.MakePath(libName, breakpadId)
-    with open(path, 'wb') as f:
+    with bz2.BZ2File(path, 'wb') as f:
       pickle.dump(symbolInfo, f, pickle.HIGHEST_PROTOCOL)
 
   def MakePath(self, libName, breakpadId):

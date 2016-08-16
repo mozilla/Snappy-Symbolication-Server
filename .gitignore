@@ -1,0 +1,22 @@
+# Exclude local config files, except sample file
+##################################################
+*.json
+!/sample_config.json
+!/tests/DiskCacheHitRequests.json
+!/tests/cacheMissRequests.json
+
+# Python generated files
+##################################################
+*.pyc
+
+# Generated logs
+##################################################
+*.log
+
+# Disk Cache
+##################################################
+/DiskCacheData/
+
+# pid files
+##################################################
+/pids/

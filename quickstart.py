@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-from quickstart_Config import config
-import DiskCache_Config as DiskCache
-import SymServer_Config as SymServer
-
 import sys
 import os
 import argparse
@@ -12,18 +8,31 @@ import multiprocessing
 import urllib2
 import contextlib
 import time
+import uuid
 try:
   import psutil
   import memcache
 except ImportError:
   pass # We will address this later in |missingDependencies|
 
+def addBinToPath():
+  quickstartDir = os.path.dirname(os.path.realpath(__file__))
+  symServerDir = os.path.realpath(os.path.join(quickstartDir, "bin"))
+  if symServerDir not in sys.path:
+    sys.path.insert(0, symServerDir)
+addBinToPath()
+from quickstart_Config import config
+import DiskCache_Config as DiskCache
+import SymServer_Config as SymServer
+
+
 START_SERVER_TIMEOUT_SEC = 5
 POLL_TIME_SEC = 0.2
 
 SRC_DIR = os.path.dirname(os.path.realpath(__file__))
-DISKCACHE_PATH = os.path.join(SRC_DIR, "DiskCache.py")
-SYMSERVER_PATH = os.path.join(SRC_DIR, "SymServer.py")
+BIN_DIR = os.path.join(SRC_DIR, "bin")
+DISKCACHE_PATH = os.path.join(BIN_DIR, "DiskCache.py")
+SYMSERVER_PATH = os.path.join(BIN_DIR, "SymServer.py")
 PID_DIR = os.path.join(SRC_DIR, "pids")
 MEMCACHED_PIDFILE = os.path.join(PID_DIR, "memcached.pid")
 DISKCACHE_PIDFILE = os.path.join(PID_DIR, "DiskCache.pid")
@@ -34,7 +43,7 @@ def main():
   if missing:
     print "Error: Missing dependencies detected!"
     print "You can install missing dependencies by running:"
-    print "python -m pip install {}".format(" ".join(missing))
+    print "python -m pip install -r requirements.txt"
     return -1
 
   parser = argparse.ArgumentParser(
@@ -228,6 +237,9 @@ def serversResponding(config):
       print "Timeout exceeded waiting for DiskCache to start"
       return False
 
+    # The config may not have a value for |port|. By loading the config the same
+    # way that DiskCache loads it, we guarantee that we have the same value
+    # that it has.
     if 'configPath' in config:
       DiskCache.config.loadFile(config['configPath'])
     elif 'configJSON' in config:
@@ -251,6 +263,7 @@ def serversResponding(config):
       print "Timeout exceeded waiting for SymServer to start"
       return False
 
+    # Make sure we have a port value to contact SymServer on.
     if 'configPath' in config:
       SymServer.config.loadFile(config['configPath'])
     elif 'configJSON' in config:
@@ -275,8 +288,8 @@ def serversResponding(config):
       return False
 
     m = memcache.Client(['127.0.0.1:{}'.format(config['memcached']['port'])])
-    arbitraryKey = '1'
-    arbitraryValue = 1
+    arbitraryKey = str(uuid.uuid4())
+    arbitraryValue = arbitraryKey
     while time.time() < timeoutEnd:
       success = m.set(arbitraryKey, arbitraryValue)
       if success:

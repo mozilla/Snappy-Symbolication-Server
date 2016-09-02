@@ -14,7 +14,10 @@ READ_CHUNK_SIZE = 1024
 
 def addSymServerToPath():
   testDir = os.path.dirname(os.path.realpath(__file__))
-  symServerDir = os.path.realpath(os.path.join(testDir, ".."))
+  quickstartDir = os.path.realpath(os.path.join(testDir, ".."))
+  if quickstartDir not in sys.path:
+    sys.path.insert(0, quickstartDir)
+  symServerDir = os.path.realpath(os.path.join(quickstartDir, "bin"))
   if symServerDir not in sys.path:
     sys.path.insert(0, symServerDir)
 

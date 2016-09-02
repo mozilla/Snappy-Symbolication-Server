@@ -20,6 +20,9 @@ Quick Start Guide
    [Configuration File](#configuration-file)
 5. Run `python quickstart.py -c [configuration file]`
 
+The server(s) can then be stopped with `python quickstart.py --stop`. This will
+only work if quickstart was used to start the server(s).
+
 DiskCache
 ---------
 
@@ -82,15 +85,31 @@ once. The script keeps track of running instances by keeping pidfiles in a
 directory called "pids" in the same directory as the quickstart script.
 **Note:** If a server is started in any way other than by quickstart, its
 pidfile will not be written to the correct place and quickstart will assume that
-the server is not running and may try to start it again. Quickstart's behavior
-is controlled largely by the configuration file. The configuration file must be
-passed to quickstart for it to start the servers. The configuration file passed
-will then be used by the servers that it starts as well. For more information
-about how to pass in a configuration file, use the `--help` argument.
+the server is not running and may try to start it again.
+
+Quickstart's behavior is controlled largely by the configuration file. The
+configuration file must be passed to quickstart for it to start the servers. The
+configuration file passed will then be used by the servers that it starts as
+well. For more informationabout how to pass in a configuration file, use the
+`--help` argument.
 
 Note that although there is a memcached binary available for Windows, quickstart
 does not support it because of differences in operation and command line
 options.
+
+**External Memcached:**
+
+Perhaps you do not want quickstart to manage memcached. This is totally fine and
+quickstart is happy to play nicely with already running instances of memcached
+(or to run without memcached). Simply set these options in the configuration
+file:
+
+- `quickstart.memcached.start` should be set to `false`.
+- `SymServer.memcachedServers` should be set to a list of memcached servers to
+  use (or an empty list to operate without memcached).
+
+More information on these options can be found in the
+[Configuration File](#configuration-file) section.
 
 Configuration File
 ------------------
@@ -126,7 +145,7 @@ All configuration values should be specified as strings unless otherwise noted.
         memcached may still be caching old symbol values. To prevent this, you
         can restart memcached when you regenerate symbol directories or turn it
         off entirely by specifying an empty list for the
-        `SymServer.memcachedServers` configuration option
+        `SymServer.memcachedServers` configuration option.
 
     - `"maxSizeMB"` The maximum size of the DiskCache in megabytes. Note that
       the cache may, at times, be larger than this. See [DiskCache](#diskcache)
@@ -349,6 +368,5 @@ To do
 -----
 
 - Evict files from cache if they no longer exist
-- Handle requests with missing module information
 - Enforce test timeouts
 - Add ability to save log files from tests rather than discarding them

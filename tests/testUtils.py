@@ -17,14 +17,11 @@ def addSymServerToPath():
   quickstartDir = os.path.realpath(os.path.join(testDir, ".."))
   if quickstartDir not in sys.path:
     sys.path.insert(0, quickstartDir)
-  symServerDir = os.path.realpath(os.path.join(quickstartDir, "bin"))
-  if symServerDir not in sys.path:
-    sys.path.insert(0, symServerDir)
 
 addSymServerToPath()
-import DiskCache_Config as DiskCache
-import SymServer_Config as SymServer
-import quickstart_Config as quickstart
+import snappy.DiskCache_Config as DiskCache
+import snappy.SymServer_Config as SymServer
+import snappy.quickstart_Config as quickstart
 
 def symServerRequest(requestString, ip, port):
   try:

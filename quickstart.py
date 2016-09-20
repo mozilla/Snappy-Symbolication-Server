@@ -15,22 +15,16 @@ try:
 except ImportError:
   pass # We will address this later in |missingDependencies|
 
-def addBinToPath():
-  quickstartDir = os.path.dirname(os.path.realpath(__file__))
-  symServerDir = os.path.realpath(os.path.join(quickstartDir, "bin"))
-  if symServerDir not in sys.path:
-    sys.path.insert(0, symServerDir)
-addBinToPath()
-from quickstart_Config import config
-import DiskCache_Config as DiskCache
-import SymServer_Config as SymServer
+from snappy.quickstart_Config import config
+import snappy.DiskCache_Config as DiskCache
+import snappy.SymServer_Config as SymServer
 
 
 START_SERVER_TIMEOUT_SEC = 5
 POLL_TIME_SEC = 0.2
 
 SRC_DIR = os.path.dirname(os.path.realpath(__file__))
-BIN_DIR = os.path.join(SRC_DIR, "bin")
+BIN_DIR = os.path.join(SRC_DIR, "snappy")
 DISKCACHE_PATH = os.path.join(BIN_DIR, "DiskCache.py")
 SYMSERVER_PATH = os.path.join(BIN_DIR, "SymServer.py")
 PID_DIR = os.path.join(SRC_DIR, "pids")

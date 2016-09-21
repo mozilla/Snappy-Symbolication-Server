@@ -47,11 +47,6 @@ class RequestHandler(tornado.web.RequestHandler):
     self.log(logLevel.INFO, "Cannot process PUT request: {}".format(uri))
     self.sendHeaders(405)
 
-  def patch(self):
-    uri = self.request.uri
-    self.log(logLevel.INFO, "Cannot process PATCH request: {}".format(uri))
-    self.sendHeaders(405)
-
   @tornado.gen.coroutine
   def post(self):
     uri = self.request.uri

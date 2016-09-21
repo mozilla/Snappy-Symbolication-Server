@@ -23,6 +23,18 @@ Quick Start Guide
 The server(s) can then be stopped with `python quickstart.py --stop`. This will
 only work if quickstart was used to start the server(s).
 
+Quick Start Guide (with docker)
+-------------------------------
+
+If you have Docker installed and working, you can do:
+
+1. `docker-compose build`
+2. `docker-compose up`
+
+Then use the sym server at http://localhost:8080 .
+
+You can stop the docker container by hitting `CTRL-C` twice.
+
 DiskCache
 ---------
 
@@ -252,6 +264,8 @@ Tests
 The Symbolication Server includes its own tests. There are two options for
 running tests. `python runTests.py` runs all tests.
 `python tests/test_[name].py` runs just one test.
+
+If you have docker, you can run all the tests using `make test`.
 
 There is also the capability to use a certain configuration for testing. This is
 done by passing a configuration file to the runTests script with

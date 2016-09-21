@@ -90,7 +90,7 @@ the server is not running and may try to start it again.
 Quickstart's behavior is controlled largely by the configuration file. The
 configuration file must be passed to quickstart for it to start the servers. The
 configuration file passed will then be used by the servers that it starts as
-well. For more informationabout how to pass in a configuration file, use the
+well. For more information about how to pass in a configuration file, use the
 `--help` argument.
 
 Note that although there is a memcached binary available for Windows, quickstart
@@ -177,7 +177,7 @@ All configuration values should be specified as strings unless otherwise noted.
       memcached will not be used.
     - `"DiskCacheServer"` A single string specifying the address (including
       port number) of the DiskCache server to use
-    - `"log"` Configuration of SymServre logging
+    - `"log"` Configuration of SymServer logging
         - `"path"` Path to save the log to
         - `"level"` Threshold for this SymServer logger. Logging messages that
           are less severe than the given level will be ignored. Level must be an
@@ -243,7 +243,7 @@ started properly.
       `-d`. quickstart sets this to "pids/memcached.pid"
 2. Start DiskCache with `python DiskCache.py -c [config]`
 3. Start SymServer with `python SymServer.py -c [config]`
-4. Try using curl to send a test request as decribed in
+4. Try using curl to send a test request as described in
    [SymServer](#symserver).
 
 Tests
@@ -307,7 +307,7 @@ property describes what the debug request does.
 **DiskCache debug actions:**
 
 - `"cacheAddRaw"` Evicts any matching cache file and downloads it again, saving
-  it byte for byte as it was recieved. This prevents regular file processing
+  it byte for byte as it was received. This prevents regular file processing
   which normally lowers the space needed per cache file and decreases lookup
   times.
     - Required properties:
@@ -345,8 +345,8 @@ property describes what the debug request does.
 **SymServer debug actions:**
 
 - `"outputCacheHits"` Toggles mode wherein standard (non-debug) requests get an
-  addtional reponse property: `"cacheHits"`. It will be structured much like the
-  `"symbolicatedStacks"` property: A list of lists of booleans. Each sublist
+  additional response property: `"cacheHits"`. It will be structured much like
+  the `"symbolicatedStacks"` property: A list of lists of booleans. Each sublist
   represents a stack and each boolean represents whether that frame in the stack
   was in the cache.
     - Required properties:

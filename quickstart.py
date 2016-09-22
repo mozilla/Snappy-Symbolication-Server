@@ -2,7 +2,6 @@
 import sys
 import os
 import argparse
-import json
 import subprocess
 import multiprocessing
 import urllib2
@@ -83,19 +82,24 @@ def missingDependencies():
   missing = []
   try:
     from concurrent.futures import Future
+    assert Future
   except ImportError:
     missing.append("futures")
   try:
     import tornado.ioloop
     import tornado.web
+    assert tornado.ioloop
+    assert tornado.web
   except ImportError:
     missing.append("tornado")
   try:
     import memcache
+    assert memcache
   except ImportError:
     missing.append("python-memcached")
   try:
     import psutil
+    assert psutil
   except ImportError:
     missing.append("psutil")
 
@@ -215,7 +219,7 @@ def getProcess(pidfile):
       return process
     except psutil.NoSuchProcess:
       return None
-  except IOError as e:
+  except IOError:
     # Couldn't read file. Likely doesn't exist, meaning process has not started
     return None
   return None

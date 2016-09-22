@@ -33,7 +33,7 @@ def validateRequest(remoteIP, data, logger):
   memoryMap = request["memoryMap"]
 
   if version != 4 and version != 3:
-    self.log(logLevel.WARNING,
+    logger(logLevel.WARNING,
       "Server currently supports versions 3 and 4 only ({} requested)"
       .format(version))
     return None

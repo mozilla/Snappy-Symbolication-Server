@@ -1,0 +1,49 @@
+{
+  "DiskCache": {
+    "cachePath": "./docker-state/DiskCacheData",
+    "localSymbolDirs": [
+    ],
+    "maxSizeMB": 200,
+    "port": 8888,
+    "symbolURLs": [
+      "https://s3-us-west-2.amazonaws.com/org.mozilla.crash-stats.symbols-public/v1/"
+    ],
+    "log": {
+      "path": "./docker-state/diskcache.log",
+      "level": 30,
+      "maxFiles": 5,
+      "maxFileSizeMB": 50
+    }
+  },
+  "SymServer": {
+    "port": 8080,
+    "memcachedServers": [
+      "127.0.0.1:11211"
+    ],
+    "DiskCacheServer": "127.0.0.1:8888",
+    "log": {
+      "path": "./docker-state/symserver.log",
+      "level": 30,
+      "maxFiles": 5,
+      "maxFileSizeMB": 50
+    }
+  },
+  "quickstart": {
+    "memcached": {
+      "start": true,
+      "restart": false,
+      "binary": "memcached",
+      "port": 11211,
+      "listenAddress": "0.0.0.0",
+      "maxMemoryMB": 64
+    },
+    "DiskCache": {
+      "start": true,
+      "restart": true
+    },
+    "SymServer": {
+      "start": true,
+      "restart": true
+    }
+  }
+}

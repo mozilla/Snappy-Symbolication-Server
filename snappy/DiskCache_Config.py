@@ -1,5 +1,6 @@
 import os
 import json
+from configUpdate import configUpdate
 
 class Config(dict):
   def __init__(self, *args, **kwargs):
@@ -25,10 +26,7 @@ class Config(dict):
   def loadJSON(self, JSON):
     config = json.loads(JSON)
     config = config['DiskCache']
-    if 'log' in config:
-      self['log'].update(config['log'])
-      del config['log']
-    self.update(config)
+    configUpdate(self, config)
     self.sanitize()
 
   def loadArgs(self, args):

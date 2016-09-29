@@ -2,3 +2,4 @@ tornado
 futures
 python-memcached
 psutil
+docker-py

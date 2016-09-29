@@ -30,6 +30,16 @@
     }
   },
   "quickstart": {
+    "Docker": {
+      "enable": false,
+      "restart": false,
+      "publish": {
+        "memcached": false,
+        "DiskCache": false,
+        "SymServer": true
+      },
+      "apiSocket": "unix:///var/run/docker.sock"
+    },
     "memcached": {
       "start": true,
       "restart": false,

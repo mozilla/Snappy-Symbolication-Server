@@ -15,7 +15,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 1001 app && useradd -g app --uid 1001 --shell /usr/sbin/nologin app
 COPY . /app
-RUN pip install -r /app/requirements.txt
+RUN pip install -U 'pip>=8' && \
+    pip install -r /app/requirements.txt
 RUN chown -R app:app /app
 WORKDIR /app
 USER app

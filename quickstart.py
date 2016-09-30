@@ -59,15 +59,17 @@ def main():
     help = "Runs in the foreground rather than as a daemon.")
   parser.add_argument('--dockerRebuild', '-R', action = "store_true",
     help = "Forces a rebuild of the docker image.")
+  parser.add_argument('--verbose', '-v', action = "store_true",
+    help = "Increases output.")
   args = parser.parse_args()
   if quickstart(args.config, args.configJSON, bool(args.stop), args.foreground,
-                args.dockerRebuild):
+                args.dockerRebuild, args.verbose):
     return 0
   else:
     return -1
 
 def quickstart(configPath = None, configJSON = None, stop = False,
-  foreground = False, dockerRebuild = False):
+  foreground = False, dockerRebuild = False, verbose = False):
   """ Of the first two arguments, configPath, configJSON, exactly one should be
   specified.
   """
@@ -78,11 +80,14 @@ def quickstart(configPath = None, configJSON = None, stop = False,
     config.loadFile(configPath)
   elif configJSON:
     config.loadJSON(configJSON)
+  if verbose:
+    config['verbose'] = True
 
   if config["Docker"]["enable"]:
-    if not stopDocker(config, forceStop = stop or dockerRebuild):
-      return False
-    if not stop:
+    if stop:
+      if not stopDocker(config):
+        return False
+    else:
       if not startDocker(config, foreground, dockerRebuild):
         return False
   else:
@@ -340,24 +345,16 @@ def sendGetRequest(port):
   except urllib2.URLError:
     return None
 
-def stopDocker(config, forceStop = False):
-  """ Returns |False| on error. If Docker is not configured for restart and
-  |forceStop == False|, it will not be stopped and |True| (success) will be
-  returned
-  """
+def stopDocker(config):
   if not dockerRunning(config):
     print "Docker already stopped."
-    return True
-
-  if not config["Docker"]["restart"] and not forceStop:
-    print "Not stopping Docker because it is not configured for restart"
     return True
 
   dockerApi = getDockerApi(config)
   try:
     dockerApi.stop(container = DOCKER_CONTAINER_NAME)
-  except:
-    print "Failed to stop Docker"
+  except Exception as ex:
+    print "Failed to stop Docker", ex
     return False
 
   if dockerRunning(config):
@@ -369,28 +366,40 @@ def stopDocker(config, forceStop = False):
 
 def startDocker(config, foreground = False, forceRebuild = False):
   dockerApi = getDockerApi(config)
+
   oldDockerConfig = getOldDockerConfigString()
   imageInfo = dockerImageInfo(config)
   rebuild = forceRebuild or not imageInfo or oldDockerConfig == None
+
+  containerInfo = dockerContainerInfo(config)
+  dockerConfig = makeDockerConfigString(config)
+  remakeContainer = rebuild or not containerInfo or dockerConfig != oldDockerConfig
+
+  if rebuild or remakeContainer:
+    stopDocker(config)
+  else:
+    if dockerRunning(config):
+      print "Docker already running!"
+      return True
+
   if rebuild:
     print "Building Docker image"
     try:
       dockerApi.remove_image(image = DOCKER_IMAGE_NAME, force = True)
-    except:
-      # Maybe the image just doesn't exist yet
+    except docker.errors.NotFound:
+      # The image just doesn't exist yet
       pass
 
     for output in dockerApi.build(path = SRC_DIR, tag = DOCKER_IMAGE_NAME):
-      pass
+      if config['verbose']:
+        print json.loads(output)["stream"],
 
-  containerInfo = dockerContainerInfo(config)
-  dockerConfig = makeDockerConfigString(config)
-  if rebuild or not containerInfo or dockerConfig != oldDockerConfig:
+  if remakeContainer:
     print "Creating Docker Container"
     try:
       dockerApi.remove_container(image = DOCKER_CONTAINER_NAME, force = True)
-    except:
-      # Maybe the container just doesn't exist yet
+    except docker.errors.NotFound:
+      # The container just doesn't exist yet
       pass
 
     internalPorts = []
@@ -442,13 +451,12 @@ def getOldDockerConfigString():
   """ Returns the configuration used to build the last docker container as a
   string. Returns |None| if there is no old configuration
   """
-  data = None
   try:
     with open(DOCKER_CACHE_FILE, 'r') as fp:
-      data = fp.read()
-  except:
-    return None
-  return data
+      return fp.read()
+  except (OSError, IOError):
+    pass
+  return None
 
 def saveDockerCacheFile(dockerConfig):
   with open(DOCKER_CACHE_FILE, 'w') as fp:
@@ -458,12 +466,11 @@ def dockerContainerInfo(config):
   """ Returns a dictionary of container info, or |None| if there is no container
   """
   dockerApi = getDockerApi(config)
-  containerInfo = None
   try:
-    containerInfo = dockerApi.inspect_container(container = DOCKER_CONTAINER_NAME)
-  except:
-    return None
-  return containerInfo
+    return dockerApi.inspect_container(container = DOCKER_CONTAINER_NAME)
+  except docker.errors.NotFound:
+    pass
+  return None
 
 def dockerRunning(config):
   containerInfo = dockerContainerInfo(config)
@@ -477,12 +484,11 @@ def dockerImageInfo(config):
   """ Returns a dictionary of image info, or |None| if there is no image
   """
   dockerApi = getDockerApi(config)
-  imageInfo = None
   try:
-    imageInfo = dockerApi.inspect_image(container = DOCKER_IMAGE_NAME)
-  except:
-    return None
-  return imageInfo
+    return dockerApi.inspect_image(container = DOCKER_IMAGE_NAME)
+  except docker.errors.NotFound:
+    pass
+  return None
 
 def makeDockerConfigString(config):
   """ Make the configuration to pass to the quickstart within Docker

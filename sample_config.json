@@ -30,6 +30,7 @@
     }
   },
   "quickstart": {
+    "verbose": false,
     "Docker": {
       "enable": false,
       "restart": false,
@@ -42,7 +43,6 @@
     },
     "memcached": {
       "start": true,
-      "restart": false,
       "binary": "memcached",
       "port": 11211,
       "listenAddress": "0.0.0.0",

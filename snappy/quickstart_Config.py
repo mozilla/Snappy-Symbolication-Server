@@ -5,9 +5,9 @@ class Config(dict):
   def __init__(self, *args, **kwargs):
     dict.__init__(self, *args, **kwargs)
     # Load defaults:
+    self['verbose'] = False
     self['Docker'] = {
       "enable": False,
-      "restart": False,
       "publish": {
         "memcached": False,
         "DiskCache": False,

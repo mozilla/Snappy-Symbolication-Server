@@ -11,9 +11,13 @@ This project is intended as a drop-in replacement for
 Quick Start without Docker
 --------------------------
 
-1. Install [Python 2.7](https://www.python.org/downloads/) if it is not already
-   installed
-2. Install dependencies: `python -m pip install -r requirements.txt`
+1. Install [Python 2.7](https://www.python.org/downloads/) and
+   [pip](https://pip.pypa.io/en/stable/installing/) if they are not already
+   installed. Pip must be version 8.0 or above. It can be upgraded using
+   `pip install -U 'pip>=8'`.
+2. Install dependencies: `pip install -r requirements.txt`. You may want to do
+   this in a
+   [virtual environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/)
 3. Install [memcached](http://www.memcached.org/downloads)
 4. Copy/create a configuration file and set values appropriately. See
    [Configuration File](#configuration-file)
@@ -30,9 +34,13 @@ Quick Start with Docker
 2. It may be necessary that your user be in the Docker group. This can be
    accomplished in Linux with `sudo usermod -aG docker $(whoami)`. You must log
    out for changes to take effect.
-3. Install [Python 2.7](https://www.python.org/downloads/) if it is not already
-   installed
-4. Install dependencies: `python -m pip install -r requirements.txt`
+3. Install [Python 2.7](https://www.python.org/downloads/) and
+   [pip](https://pip.pypa.io/en/stable/installing/) if they are not already
+   installed. Pip must be version 8.0 or above. It can be upgraded using
+   `pip install -U 'pip>=8'`.
+4. Install dependencies: `pip install -r requirements.txt`. You may want to do
+   this in a
+   [virtual environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/)
 5. Copy/create a configuration file and set values appropriately. See
    [Configuration File](#configuration-file). To use Docker, it is important
    that the `quickstart.Docker.enable = true`.
@@ -42,6 +50,8 @@ Quickstart attempts to do some caching in order to recreate the image and
 container only when necessary. The image will be built only once. The container
 will be recreated any time that the passed configuration changes. You can
 force a full rebuild with `python quickstart.py -c [configuration file] -R`.
+A full rebuild should be done anytime that the code changes.
+
 The docker container can be stopped with
 `python quickstart.py -c [configuration file] --stop`.
 
@@ -210,15 +220,12 @@ All configuration values should be specified as strings unless otherwise noted.
         - `"maxFileSizeMB"` An integer type describing how large logs can get
           (in megabytes) before being rotated.
 - `"quickstart"` Configuration options related to the quickstart script
+    - `"verbose"` Must be a boolean type. If set to `true`, quickstart will
+      display additional output. Useful for debugging. Setting this to `true`
+      is equivilant to passing `--verbose` to the quickstart script.
     - `"Docker"` Configuration options related to Docker
         - `"enable"` Must be a boolean type. If set to `true`, quickstart
           will start the servers within a Docker container
-        - `"restart"` Must be a boolean type. If set to `false`, quickstart
-          will not restart the Docker container if it is already started.
-          This is, however, subject to some conditions. If a rebuild is needed
-          (or requested with `-R`), or if the configuration options have
-          changed, the Docker container will be restarted regardless of this
-          option.
         - `"publish"`
             - `"memcached"` Must be a boolean type. If set to `true`, the port
               that memcached is running on will be exposed to the host system.

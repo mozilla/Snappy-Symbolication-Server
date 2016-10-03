@@ -16,19 +16,19 @@ import quickstart
 REQUEST_COUNT = 300
 
 TEST_DIR = os.path.dirname(os.path.realpath(__file__))
-DISK_CACHE_HIT_REQUEST_PATH = os.path.join(TEST_DIR,
-                                                                                      "DiskCacheHitRequests.json")
+DISK_CACHE_HIT_REQUEST_PATH = os.path.join(TEST_DIR, "DiskCacheHitRequests.json")
 CACHE_MISS_REQUEST_PATH = os.path.join(TEST_DIR, "cacheMissRequests.json")
+
 
 class StressTest(unittest.TestCase):
     def setUp(self):
         self.config = testUtils.getDefaultConfig()
         self.tempDirs = testUtils.setConfigToUseTempDirs(self.config)
-        if not quickstart.quickstart(configJSON = json.dumps(self.config)):
+        if not quickstart.quickstart(configJSON=json.dumps(self.config)):
             self.fail("Unable to start servers")
 
     def tearDown(self):
-        if not quickstart.quickstart(configJSON = json.dumps(self.config), stop = True):
+        if not quickstart.quickstart(configJSON=json.dumps(self.config), stop=True):
             print "WARNING: Servers were not properly stopped!"
         for tempDir in self.tempDirs:
             if os.path.exists(tempDir):
@@ -45,7 +45,7 @@ class StressTest(unittest.TestCase):
 
         print "Priming cache..."
         response = testUtils.symServerRequest(request, "127.0.0.1",
-                                                                                    self.config['SymServer']['port'])
+                                              self.config['SymServer']['port'])
         testUtils.verifySampleResponse(self, response)
         print "Done priming cache."
 
@@ -86,7 +86,7 @@ class StressTest(unittest.TestCase):
         request = json.dumps(primingData['request'])
         expectedResponse = json.dumps(primingData['response'])
         response = testUtils.symServerRequest(request, "127.0.0.1",
-                                                                                    self.config['SymServer']['port'])
+                                              self.config['SymServer']['port'])
         testUtils.verifyExpectedResponse(self, expectedResponse, response)
         print "Done priming cache."
 
@@ -182,10 +182,10 @@ class StressTest(unittest.TestCase):
 
         print "Priming cache"
         response = testUtils.symServerRequest(memcachedPrimingRequest, "127.0.0.1",
-                                                                                    self.config['SymServer']['port'])
+                                              self.config['SymServer']['port'])
         testUtils.verifyExpectedResponse(self, memcachedPrimingReponse, response)
         response = testUtils.symServerRequest(diskCachePrimingRequest, "127.0.0.1",
-                                                                                    self.config['SymServer']['port'])
+                                              self.config['SymServer']['port'])
         testUtils.verifyExpectedResponse(self, diskCachePrimingResponse, response)
         print "Done priming cache"
 
@@ -240,7 +240,7 @@ class StressTest(unittest.TestCase):
         responseQueue = Queue.Queue()
         for request in requests:
             requestThread = RequestThread(request, self.config['SymServer']['port'],
-                                                                        responseQueue)
+                                          responseQueue)
             requestThreads.append(requestThread)
             requestThread.start()
 
@@ -253,7 +253,7 @@ class StressTest(unittest.TestCase):
         while not responseQueue.empty():
             request, response = responseQueue.get()
             testUtils.verifyExpectedResponse(self, expectedResponses[request],
-                                                                              response)
+                                             response)
 
         return elapsedTime
 

@@ -2,6 +2,7 @@ import os
 import json
 from configUpdate import configUpdate
 
+
 class Config(dict):
     def __init__(self, *args, **kwargs):
         dict.__init__(self, *args, **kwargs)
@@ -10,11 +11,13 @@ class Config(dict):
         self['localSymbolDirs'] = []
         self['maxSizeMB'] = 200
         self['port'] = 8888
-        self['symbolURLs'] = ["https://s3-us-west-2.amazonaws.com/org.mozilla.crash-stats.symbols-public/v1/"]
+        self['symbolURLs'] = [
+            "https://s3-us-west-2.amazonaws.com/org.mozilla.crash-stats.symbols-public/v1/"
+        ]
         self['log'] = {
-            'path':          "DiskCache.log",
-            'level':         30,
-            'maxFiles':      5,
+            'path': "DiskCache.log",
+            'level': 30,
+            'maxFiles': 5,
             'maxFileSizeMB': 50
         }
 
@@ -30,27 +33,27 @@ class Config(dict):
         self.sanitize()
 
     def loadArgs(self, args):
-        if args.config != None:
+        if args.config is not None:
             self.loadFile(args.config)
-        if args.configJSON != None:
+        if args.configJSON is not None:
             self.loadJSON(args.configJSON)
-        if args.cachePath != None:
+        if args.cachePath is not None:
             self['cachePath'] = args.cachePath
-        if args.localSymbols != None:
+        if args.localSymbols is not None:
             self['localSymbolDirs'] = args.localSymbols
-        if args.maxSize != None:
+        if args.maxSize is not None:
             self['maxSizeMB'] = args.maxSize
-        if args.port != None:
+        if args.port is not None:
             self['port'] = args.port
-        if args.symbolURL != None:
+        if args.symbolURL is not None:
             self['symbolURLs'] = args.symbolURL
-        if args.logPath != None:
+        if args.logPath is not None:
             self['log']['path'] = args.logPath
-        if args.logLevel != None:
+        if args.logLevel is not None:
             self['log']['level'] = args.logLevel
-        if args.logFiles != None:
+        if args.logFiles is not None:
             self['log']['maxFiles'] = args.logFiles
-        if args.logFileSize != None:
+        if args.logFileSize is not None:
             self['log']['maxFileSizeMB'] = args.logFileSize
         self.sanitize()
 

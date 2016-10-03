@@ -2,6 +2,7 @@ import os
 import json
 from configUpdate import configUpdate
 
+
 class Config(dict):
     def __init__(self, *args, **kwargs):
         dict.__init__(self, *args, **kwargs)
@@ -10,9 +11,9 @@ class Config(dict):
         self['memcachedServers'] = ["127.0.0.1:11211"]
         self['DiskCacheServer'] = "127.0.0.1:8888"
         self['log'] = {
-            'path':          "SymServer.log",
-            'level':         30,
-            'maxFiles':      5,
+            'path': "SymServer.log",
+            'level': 30,
+            'maxFiles': 5,
             'maxFileSizeMB': 50
         }
 
@@ -28,32 +29,32 @@ class Config(dict):
         self.sanitize()
 
     def loadArgs(self, args):
-        if args.config != None:
+        if args.config is not None:
             self.loadFile(args.config)
-        if args.configJSON != None:
+        if args.configJSON is not None:
             self.loadJSON(args.configJSON)
-        if args.port != None:
+        if args.port is not None:
             self['port'] = args.port
-        if args.memcachedServer != None:
+        if args.memcachedServer is not None:
             if len(args.memcachedServer) == 1 and args.memcachedServer[0].lower() == "none":
                 self['memcachedServers'] = []
             else:
                 self['memcachedServers'] = args.memcachedServer
-        if args.diskCacheServer != None:
+        if args.diskCacheServer is not None:
             self['DiskCacheServer'] = args.diskCacheServer
-        if args.logPath != None:
+        if args.logPath is not None:
             self['log']['path'] = args.logPath
-        if args.logLevel != None:
+        if args.logLevel is not None:
             self['log']['level'] = args.logLevel
-        if args.logFiles != None:
+        if args.logFiles is not None:
             self['log']['maxFiles'] = args.logFiles
-        if args.logFileSize != None:
+        if args.logFileSize is not None:
             self['log']['maxFileSizeMB'] = args.logFileSize
         self.sanitize()
 
     def sanitize(self):
         self['log']['path'] = os.path.realpath(self['log']['path'])
-        if not self['DiskCacheServer'].startswith("http://") and not self['DiskCacheServer'].startswith("https://"):
+        if (not self['DiskCacheServer'].startswith(("http://", "https://"))):
             self['DiskCacheServer'] = "http://" + self['DiskCacheServer']
 
 config = Config()

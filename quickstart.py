@@ -14,13 +14,13 @@ try:
     import memcache
     import docker
 except ImportError:
-    pass # We will address this later in |missingDependencies|
+    pass  # We will address this later in |missingDependencies|
 
 from snappy.quickstart_Config import config
 import snappy.DiskCache_Config as DiskCache
 import snappy.SymServer_Config as SymServer
 
-
+# Constants
 START_SERVER_TIMEOUT_SEC = 5
 POLL_TIME_SEC = 0.2
 
@@ -36,6 +36,12 @@ DOCKER_CACHE_FILE = os.path.join(SRC_DIR, ".docker-cache")
 DOCKER_IMAGE_NAME = "snappy"
 DOCKER_CONTAINER_NAME = "snappy"
 
+# Globals
+gDockerApi = None
+gDiskCacheConfig = None
+gSymServerConfig = None
+
+
 def main():
     missing = missingDependencies()
     if missing:
@@ -44,32 +50,32 @@ def main():
         print "python -m pip install -r requirements.txt"
         return -1
 
-    parser = argparse.ArgumentParser(
-        description = "Start servers needed for symbolication")
-    group = parser.add_mutually_exclusive_group(required = True)
-    group.add_argument('--config', '-c', metavar = "PATH", help = "Path to the "
-        "config JSON file.")
-    group.add_argument('--configJSON', metavar = "JSON", help = "Literal JSON to "
-        "load configuration from rather than a configuration file.")
-    parser.add_argument('--stop', action = "store_true", help = "If specified, "
-        "this script will stop all servers rather than starting them. Note that "
-        "this will not necessarily work if quickstart was not used to start the "
-        "servers.")
-    parser.add_argument('--foreground', '-F', action = "store_true",
-        help = "Runs in the foreground rather than as a daemon.")
-    parser.add_argument('--dockerRebuild', '-R', action = "store_true",
-        help = "Forces a rebuild of the docker image.")
-    parser.add_argument('--verbose', '-v', action = "store_true",
-        help = "Increases output.")
+    parser = argparse.ArgumentParser(description="Start servers needed for symbolication")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--config', '-c', metavar="PATH", help="Path to the "
+                       "config JSON file.")
+    group.add_argument('--configJSON', metavar="JSON", help="Literal JSON to "
+                       "load configuration from rather than a configuration file.")
+    parser.add_argument('--stop', action="store_true", help="If specified, "
+                        "this script will stop all servers rather than starting them. Note that "
+                        "this will not necessarily work if quickstart was not used to start the "
+                        "servers.")
+    parser.add_argument('--foreground', '-F', action="store_true",
+                        help="Runs in the foreground rather than as a daemon.")
+    parser.add_argument('--dockerRebuild', '-R', action="store_true",
+                        help="Forces a rebuild of the docker image.")
+    parser.add_argument('--verbose', '-v', action="store_true",
+                        help="Increases output.")
     args = parser.parse_args()
     if quickstart(args.config, args.configJSON, bool(args.stop), args.foreground,
-                                args.dockerRebuild, args.verbose):
+                  args.dockerRebuild, args.verbose):
         return 0
     else:
         return -1
 
-def quickstart(configPath = None, configJSON = None, stop = False,
-    foreground = False, dockerRebuild = False, verbose = False):
+
+def quickstart(configPath=None, configJSON=None, stop=False, foreground=False,
+               dockerRebuild=False, verbose=False):
     """ Of the first two arguments, configPath, configJSON, exactly one should be
     specified.
     """
@@ -91,7 +97,7 @@ def quickstart(configPath = None, configJSON = None, stop = False,
             if not startDocker(config, foreground, dockerRebuild):
                 return False
     else:
-        if not stopServers(config, stopAll = stop):
+        if not stopServers(config, stopAll=stop):
             return False
         if not stop:
             if not startServers(config, foreground):
@@ -100,6 +106,7 @@ def quickstart(configPath = None, configJSON = None, stop = False,
                 if not serversResponding(config):
                     return False
     return True
+
 
 def missingDependencies():
     missing = []
@@ -133,7 +140,8 @@ def missingDependencies():
 
     return missing
 
-def stopServers(config, stopAll = False):
+
+def stopServers(config, stopAll=False):
     pidfiles = []
     if stopAll or not config['SymServer']['start'] or config['SymServer']['restart']:
         pidfiles.append(SYMSERVER_PIDFILE)
@@ -155,12 +163,12 @@ def stopServers(config, stopAll = False):
     print "Stopping servers..."
     for process in processes:
         process.terminate()
-    gone, alive = psutil.wait_procs(processes, timeout = 5)
+    gone, alive = psutil.wait_procs(processes, timeout=5)
     if alive:
         print "Some servers still have not stopped. Attempting to force..."
         for process in alive:
             process.kill()
-        gone, alive = psutil.wait_procs(alive, timeout = 5)
+        gone, alive = psutil.wait_procs(alive, timeout=5)
         if alive:
             print "Unable to stop all servers"
             return False
@@ -168,14 +176,15 @@ def stopServers(config, stopAll = False):
     print "Servers stopped"
     return True
 
-def startServers(config, foreground = False):
+
+def startServers(config, foreground=False):
     startSymServer = config['SymServer']['start'] and not symServerRunning()
     foregroundSymServer = foreground and startSymServer
     startDiskCache = config['DiskCache']['start'] and not diskCacheRunning()
     foregroundDiskCache = foreground and startDiskCache and not foregroundSymServer
     startMemcached = config['memcached']['start'] and not memcachedRunning()
-    foregroundMemcached = foreground and startMemcached and \
-                                                not foregroundSymServer and not foregroundDiskCache
+    foregroundMemcached = (foreground and startMemcached and not foregroundSymServer and
+                           not foregroundDiskCache)
 
     # This one is easy because it already has an option to start as a daemon
     if startMemcached:
@@ -194,7 +203,7 @@ def startServers(config, foreground = False):
             subprocess.call(command)
         else:
             with open(os.devnull, 'w') as devnull:
-                subprocess.call(command, stdout = devnull, stderr = devnull)
+                subprocess.call(command, stdout=devnull, stderr=devnull)
 
     # Get the options to specify the configuration to the SymServer and DiskCache
     configOptions = []
@@ -235,26 +244,33 @@ def startServers(config, foreground = False):
             runDaemon(command)
     return True
 
+
 def runDaemon(command):
-    p = multiprocessing.Process(target = startProcess, args = (command,))
+    p = multiprocessing.Process(target=startProcess, args=(command,))
     p.start()
     p.join()
 
+
 def startProcess(command):
     with open(os.devnull, 'w') as devnull:
-        subprocess.Popen(command, stdout = devnull, stderr = devnull)
+        subprocess.Popen(command, stdout=devnull, stderr=devnull)
+
 
 def memcachedRunning():
     return isRunning(MEMCACHED_PIDFILE)
 
+
 def diskCacheRunning():
     return isRunning(DISKCACHE_PIDFILE)
+
 
 def symServerRunning():
     return isRunning(SYMSERVER_PIDFILE)
 
+
 def isRunning(pidfile):
-    return (getProcess(pidfile) != None)
+    return (getProcess(pidfile) is not None)
+
 
 def getProcess(pidfile):
     try:
@@ -270,12 +286,13 @@ def getProcess(pidfile):
         return None
     return None
 
+
 def serversResponding(config):
     timeoutEnd = time.time() + START_SERVER_TIMEOUT_SEC
     if config['DiskCache']['start']:
         while time.time() < timeoutEnd:
             if diskCacheRunning():
-                break;
+                break
             time.sleep(POLL_TIME_SEC)
         else:
             print "Timeout exceeded waiting for DiskCache to start"
@@ -295,7 +312,7 @@ def serversResponding(config):
     if config['SymServer']['start']:
         while time.time() < timeoutEnd:
             if symServerRunning():
-                break;
+                break
             time.sleep(POLL_TIME_SEC)
         else:
             print "Timeout exceeded waiting for SymServer to start"
@@ -315,7 +332,7 @@ def serversResponding(config):
     if config['memcached']['start']:
         while time.time() < timeoutEnd:
             if memcachedRunning():
-                break;
+                break
             time.sleep(POLL_TIME_SEC)
         else:
             print "Timeout exceeded waiting for memcached to start"
@@ -335,6 +352,7 @@ def serversResponding(config):
         m.delete(arbitraryKey)
     return True
 
+
 def sendGetRequest(port):
     try:
         request = urllib2.Request("http://127.0.0.1:{}".format(port))
@@ -345,6 +363,7 @@ def sendGetRequest(port):
     except urllib2.URLError:
         return None
 
+
 def stopDocker(config):
     if not dockerRunning(config):
         print "Docker already stopped."
@@ -352,7 +371,7 @@ def stopDocker(config):
 
     dockerApi = getDockerApi(config)
     try:
-        dockerApi.stop(container = DOCKER_CONTAINER_NAME)
+        dockerApi.stop(container=DOCKER_CONTAINER_NAME)
     except Exception as ex:
         print "Failed to stop Docker", ex
         return False
@@ -364,12 +383,13 @@ def stopDocker(config):
     print "Docker stopped"
     return True
 
-def startDocker(config, foreground = False, forceRebuild = False):
+
+def startDocker(config, foreground=False, forceRebuild=False):
     dockerApi = getDockerApi(config)
 
     oldDockerConfig = getOldDockerConfigString()
     imageInfo = dockerImageInfo(config)
-    rebuild = forceRebuild or not imageInfo or oldDockerConfig == None
+    rebuild = forceRebuild or not imageInfo or oldDockerConfig is None
 
     containerInfo = dockerContainerInfo(config)
     dockerConfig = makeDockerConfigString(config)
@@ -385,19 +405,19 @@ def startDocker(config, foreground = False, forceRebuild = False):
     if rebuild:
         print "Building Docker image"
         try:
-            dockerApi.remove_image(image = DOCKER_IMAGE_NAME, force = True)
+            dockerApi.remove_image(image=DOCKER_IMAGE_NAME, force=True)
         except docker.errors.NotFound:
             # The image just doesn't exist yet
             pass
 
-        for output in dockerApi.build(path = SRC_DIR, tag = DOCKER_IMAGE_NAME):
+        for output in dockerApi.build(path=SRC_DIR, tag=DOCKER_IMAGE_NAME):
             if config['verbose']:
                 print json.loads(output)["stream"],
 
     if remakeContainer:
         print "Creating Docker Container"
         try:
-            dockerApi.remove_container(image = DOCKER_CONTAINER_NAME, force = True)
+            dockerApi.remove_container(image=DOCKER_CONTAINER_NAME, force=True)
         except docker.errors.NotFound:
             # The container just doesn't exist yet
             pass
@@ -419,33 +439,31 @@ def startDocker(config, foreground = False, forceRebuild = False):
             internalPorts.append(port)
             if config["Docker"]["publish"]["SymServer"]:
                 publishedPortMapping[port] = port
-        hostConfig = dockerApi.create_host_config(port_bindings = publishedPortMapping)
+        hostConfig = dockerApi.create_host_config(port_bindings=publishedPortMapping)
 
         quickstartArgs = ["--foreground", "--configJSON", dockerConfig]
 
-        container = dockerApi.create_container(image = DOCKER_IMAGE_NAME,
-                                                                                      ports = internalPorts,
-                                                                                      host_config = hostConfig,
-                                                                                      detach = not foreground,
-                                                                                      name = DOCKER_CONTAINER_NAME,
-                                                                                      command = quickstartArgs)
+        dockerApi.create_container(image=DOCKER_IMAGE_NAME, ports=internalPorts,
+                                   host_config=hostConfig, detach=not foreground,
+                                   name=DOCKER_CONTAINER_NAME, command=quickstartArgs)
         saveDockerCacheFile(dockerConfig)
 
     if dockerRunning(config):
         print "Docker already running"
     else:
         print "Starting Container"
-        dockerApi.start(container = DOCKER_CONTAINER_NAME)
+        dockerApi.start(container=DOCKER_CONTAINER_NAME)
 
     return True
 
-gDockerApi = None
+
 def getDockerApi(config):
     global gDockerApi
     if gDockerApi:
         return gDockerApi
-    gDockerApi = docker.Client(base_url = config["Docker"]["apiSocket"])
+    gDockerApi = docker.Client(base_url=config["Docker"]["apiSocket"])
     return gDockerApi
+
 
 def getOldDockerConfigString():
     """ Returns the configuration used to build the last docker container as a
@@ -458,19 +476,22 @@ def getOldDockerConfigString():
         pass
     return None
 
+
 def saveDockerCacheFile(dockerConfig):
     with open(DOCKER_CACHE_FILE, 'w') as fp:
         fp.write(dockerConfig)
+
 
 def dockerContainerInfo(config):
     """ Returns a dictionary of container info, or |None| if there is no container
     """
     dockerApi = getDockerApi(config)
     try:
-        return dockerApi.inspect_container(container = DOCKER_CONTAINER_NAME)
+        return dockerApi.inspect_container(container=DOCKER_CONTAINER_NAME)
     except docker.errors.NotFound:
         pass
     return None
+
 
 def dockerRunning(config):
     containerInfo = dockerContainerInfo(config)
@@ -480,15 +501,17 @@ def dockerRunning(config):
         return True
     return False
 
+
 def dockerImageInfo(config):
     """ Returns a dictionary of image info, or |None| if there is no image
     """
     dockerApi = getDockerApi(config)
     try:
-        return dockerApi.inspect_image(container = DOCKER_IMAGE_NAME)
+        return dockerApi.inspect_image(container=DOCKER_IMAGE_NAME)
     except docker.errors.NotFound:
         pass
     return None
+
 
 def makeDockerConfigString(config):
     """ Make the configuration to pass to the quickstart within Docker
@@ -500,13 +523,13 @@ def makeDockerConfigString(config):
         dockerConfig = config["configJSON"]
     else:
         raise KeyError("No configuration source in quickstart configuration "
-            "(Should contain 'configPath' or 'configJSON')")
+                       "(Should contain 'configPath' or 'configJSON')")
     dockerConfig = json.loads(dockerConfig)
-    dockerConfig["quickstart"]["Docker"]["enable"] = False # No recursing!
-    dockerConfig = json.dumps(dockerConfig, sort_keys = True)
+    dockerConfig["quickstart"]["Docker"]["enable"] = False  # No recursing!
+    dockerConfig = json.dumps(dockerConfig, sort_keys=True)
     return dockerConfig
 
-gDiskCacheConfig = None
+
 def getDiskCacheConfig(config):
     global gDiskCacheConfig
     if gDiskCacheConfig:
@@ -521,7 +544,7 @@ def getDiskCacheConfig(config):
     gDiskCacheConfig = DiskCache.config
     return gDiskCacheConfig
 
-gSymServerConfig = None
+
 def getSymServerConfig(config):
     global gSymServerConfig
     if gSymServerConfig:
@@ -535,6 +558,7 @@ def getSymServerConfig(config):
         SymServer.config.loadJSON(config['configJSON'])
     gSymServerConfig = SymServer.config
     return gSymServerConfig
+
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()

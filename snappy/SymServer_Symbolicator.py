@@ -11,6 +11,7 @@ import urllib2
 import contextlib
 import traceback
 
+
 class Symbolicator:
     def __init__(self):
         # Don't init anything that needs config now, because it may not be ready yet
@@ -21,7 +22,7 @@ class Symbolicator:
     def initialize(self):
         self.initialized = True
         if config['memcachedServers']:
-            self.memcache = memcache.Client(config['memcachedServers'], debug = 0)
+            self.memcache = memcache.Client(config['memcachedServers'], debug=0)
         else:
             self.memcache = None
 
@@ -33,16 +34,17 @@ class Symbolicator:
             action = request['action']
             if action == "outputCacheHits":
                 self.outputCacheHits = bool(request['enabled'])
-                logger.log(logLevel.WARNING,
-                    "{} outputCacheHits set to: {}".format(id, self.outputCacheHits))
+                logger.log(logLevel.WARNING, "{} outputCacheHits set to: {}"
+                           .format(id, self.outputCacheHits))
                 future.set_result({"success": True})
                 return future
             # If the action was not recognized, fall through to let the symbolication
             # thread handle it
         symbolicationThread = SymbolicationThread(request, future, self.memcache,
-                                                                                            id, self.outputCacheHits)
+                                                  id, self.outputCacheHits)
         symbolicationThread.start()
         return future
+
 
 class SymbolicationThread(threading.Thread):
     def __init__(self, request, future, memcache, id, outputCacheHits):
@@ -98,8 +100,8 @@ class SymbolicationThread(threading.Thread):
             ex_type, ex, tb = sys.exc_info()
             stack = traceback.extract_tb(tb)
             self.log(logLevel.ERROR,
-                "Thread caught exception while symbolicating: {}: {} STACK: {}"
-                .format(ex_type, e, stack))
+                     "Thread caught exception while symbolicating: {}: {} STACK: {}"
+                     .format(ex_type, e, stack))
             self.future.set_exception(e)
 
     def symbolicateRequest(self):
@@ -127,13 +129,13 @@ class SymbolicationThread(threading.Thread):
                     continue
 
                 module = memoryMap[moduleIndex]
-                module = (module[0], module[1]) # Lists can't be hashed. Tuples can.
+                module = (module[0], module[1])  # Lists can't be hashed. Tuples can.
                 moduleOffsetId = self.moduleOffsetId(module, offset)
 
                 cacheResult = None
                 if self.memcache:
                     cacheResult = self.memcache.get(moduleOffsetId)
-                if cacheResult != None:
+                if cacheResult is not None:
                     responseStack[stackIndex][frameIndex] = cacheResult
                     responseKnownModules[moduleIndex] = True
                     if self.outputCacheHits:
@@ -154,8 +156,8 @@ class SymbolicationThread(threading.Thread):
                     subRequestModuleIndex[module] = len(subRequestMemoryMap) - 1
 
         if unresolvedFrames:
-            self.log(logLevel.INFO,
-                "{} frames in not in memcached".format(len(unresolvedFrames)))
+            self.log(logLevel.INFO, "{} frames in not in memcached"
+                     .format(len(unresolvedFrames)))
 
             cacheResponse = self.queryDiskCache(subRequest)
             if cacheResponse:
@@ -164,7 +166,7 @@ class SymbolicationThread(threading.Thread):
                 for frame in unresolvedFrames:
                     stackIndex, frameIndex, moduleIndex, subRequestIndex = frame
                     module = memoryMap[moduleIndex]
-                    module = (module[0], module[1]) # Lists can't be hashed. Tuples can.
+                    module = (module[0], module[1])  # Lists can't be hashed. Tuples can.
                     moduleKnown = knownModules[subRequestModuleIndex[module]]
                     if moduleKnown:
                         symbol = stack[subRequestIndex]
@@ -193,13 +195,12 @@ class SymbolicationThread(threading.Thread):
             request.add_data(json.dumps(requestData))
             with contextlib.closing(urllib2.urlopen(request)) as response:
                 if response.getcode() != 200:
-                    self.log(logLevel.WARNING,
-                        "Got HTTP Code {} when querying DiskCache".format(response.getcode()))
+                    self.log(logLevel.WARNING, "Got HTTP Code {} when querying DiskCache"
+                             .format(response.getcode()))
                     return None
                 return json.loads(response.read())
         except Exception as e:
-            self.log(logLevel.ERROR,
-                "Exception when querying DiskCache: {}".format(e))
+            self.log(logLevel.ERROR, "Exception when querying DiskCache: {}".format(e))
             return None
 
     def debugRequest(self):
@@ -208,16 +209,16 @@ class SymbolicationThread(threading.Thread):
         if 'libName' in request and 'breakpadId' in request and 'offset' in request:
             # Many debug actions require a cache id
             cacheId = self.moduleOffsetId((request['libName'], request['breakpadId']),
-                                                                        request['offset'])
+                                          request['offset'])
 
         if action == "cacheEvict":
             self.memcache.delete(cacheId)
-            self.log(logLevel.WARNING,
-                "{} Cache item manually evicted: {}".format(self.id, cacheId))
+            self.log(logLevel.WARNING, "{} Cache item manually evicted: {}"
+                     .format(self.id, cacheId))
             self.response['success'] = True
         else:
-            self.log(logLevel.ERROR,
-                "{} Unknown debug action requested: {}".format(self.id, action))
+            self.log(logLevel.ERROR, "{} Unknown debug action requested: {}"
+                     .format(self.id, action))
             self.response['message'] = "Invalid action"
 
 symbolicator = Symbolicator()

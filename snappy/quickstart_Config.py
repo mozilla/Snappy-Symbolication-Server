@@ -1,6 +1,7 @@
 import json
 from configUpdate import configUpdate
 
+
 class Config(dict):
     def __init__(self, *args, **kwargs):
         dict.__init__(self, *args, **kwargs)

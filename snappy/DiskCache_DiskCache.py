@@ -13,6 +13,7 @@ import contextlib
 from StringIO import StringIO
 import gzip
 
+
 class DiskCache:
     def __init__(self):
         self.workQueue = Queue.Queue()
@@ -30,7 +31,7 @@ class DiskCache:
 
         self.workQueue.put(workObject)
         logger.log(logLevel.DEBUG,
-            "{} Work submitted to DiskCache thread".format(id))
+                   "{} Work submitted to DiskCache thread".format(id))
 
         return future
 
@@ -50,6 +51,7 @@ class DiskCache:
             response['symbolicatedStacks'].append(responseStack)
         return response
 
+
 class DiskCacheThread(threading.Thread):
     def __init__(self, workQueue):
         threading.Thread.__init__(self)
@@ -62,7 +64,7 @@ class DiskCacheThread(threading.Thread):
         # config may not be loaded during __init__. Initialize data from config in
         # self.run()
         self.symbolURLs = []
-        self.cache = None # LRUCache also needs config
+        self.cache = None  # LRUCache also needs config
         self.staticCache = {}
 
     def init(self):
@@ -97,11 +99,11 @@ class DiskCacheThread(threading.Thread):
         while True:
             id = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
             future = None
-            with self.firstCacheItem(): # Make SURE that we pop the first cache item
-                                                                    # off the work queue even if we fail. We don't
-                                                                    # want to keep processing it over and over.
+            with self.firstCacheItem():     # Make SURE that we pop the first cache item
+                                            # off the work queue even if we fail. We don't
+                                            # want to keep processing it over and over.
                 try:
-                    self.transferWorkQueue(needOne = True)
+                    self.transferWorkQueue(needOne=True)
                     id, request, response, future = self.workQueue[0]
                     runIt = future.set_running_or_notify_cancel()
                     if not runIt:
@@ -120,8 +122,8 @@ class DiskCacheThread(threading.Thread):
                     ex_type, ex, tb = sys.exc_info()
                     stack = traceback.extract_tb(tb)
                     logger.log(logLevel.ERROR,
-                        "{} Thread caught exception while working: {}: {} STACK: {}"
-                        .format(id, ex_type, e, stack))
+                               "{} Thread caught exception while working: {}: {} STACK: {}"
+                               .format(id, ex_type, e, stack))
                     if future:
                         future.set_exception(e)
                     continue
@@ -131,19 +133,19 @@ class DiskCacheThread(threading.Thread):
         yield
         self.workQueue.pop(0)
 
-    def transferWorkQueue(self, needOne = False):
+    def transferWorkQueue(self, needOne=False):
         if len(self.workQueue) > 0 and needOne:
             # We need one, but we already have one!
             needOne = False
 
-        workObj = self.getFromAsyncQueue(block = needOne)
+        workObj = self.getFromAsyncQueue(block=needOne)
         while workObj:
             self.workQueue.append(workObj)
-            workObj = self.getFromAsyncQueue(block = False)
+            workObj = self.getFromAsyncQueue(block=False)
 
     def getFromAsyncQueue(self, block):
         try:
-            item = self.asyncWorkQueue.get(block = block)
+            item = self.asyncWorkQueue.get(block=block)
         except Queue.Empty:
             item = None
         return item
@@ -164,8 +166,8 @@ class DiskCacheThread(threading.Thread):
 
             # Find frames from all requests that use this module
             frameIndicies, offsets = self.findAllFramesReferencingModule(moduleIndex,
-                                                                                                                                      libName,
-                                                                                                                                      breakpadId)
+                                                                         libName,
+                                                                         breakpadId)
             if not offsets:
                 continue
 
@@ -214,7 +216,8 @@ class DiskCacheThread(threading.Thread):
                 for frameIndex, frame in enumerate(stack):
                     frameModuleIndex, frameOffset = frame
                     if frameModuleIndex == moduleIndex:
-                        frameIndicies.append((workIndex, stackIndex, frameIndex, moduleIndex, frameOffset))
+                        frameIndicies.append((workIndex, stackIndex, frameIndex,
+                                             moduleIndex, frameOffset))
                         offsets.add(frameOffset)
         return frameIndicies, list(offsets)
 
@@ -246,7 +249,7 @@ class DiskCacheThread(threading.Thread):
         path = os.path.join(libName, breakpadId, fileName)
         return path
 
-    def downloadToCache(self, libName, breakpadId, symbolFilename, destPath, saveRaw = False):
+    def downloadToCache(self, libName, breakpadId, symbolFilename, destPath, saveRaw=False):
         destDir = os.path.dirname(destPath)
         if not os.path.exists(destDir):
             os.makedirs(destDir)
@@ -257,14 +260,15 @@ class DiskCacheThread(threading.Thread):
                 with contextlib.closing(urllib2.urlopen(url)) as response:
                     if response.getcode() != 200:
                         logger.log(logLevel.WARNING,
-                            "Got HTTP Code {} when requesting symbol file at {}".format(response.getcode(), url))
+                                   "Got HTTP Code {} when requesting symbol file at {}"
+                                   .format(response.getcode(), url))
                         continue
                     headers = response.info()
                     contentEncoding = headers.get("Content-Encoding", "").lower()
                     if contentEncoding in ("gzip", "x-gzip", "deflate"):
                         with contextlib.closing(StringIO(response.read())) as dataStream:
                             try:
-                                with gzip.GzipFile(fileobj = dataStream) as f:
+                                with gzip.GzipFile(fileobj=dataStream) as f:
                                     data = f.read()
                             except Exception:
                                 data = dataStream.decode('zlib')
@@ -280,7 +284,8 @@ class DiskCacheThread(threading.Thread):
                 return True
             except Exception as e:
                 logger.log(logLevel.ERROR,
-                    "Exception when requesting symbol file at {}: {}".format(url, e))
+                           "Exception when requesting symbol file at {}: {}"
+                           .format(url, e))
                 continue
         # Ran out of URLs to try
         return False
@@ -304,7 +309,8 @@ class DiskCacheThread(threading.Thread):
                 fields = line.split(" ", 3)
                 if len(fields) < 4:
                     logger.log(logLevel.WARNING,
-                        "PUBLIC line {} in {} has too few fields".format(lineNum, libId))
+                               "PUBLIC line {} in {} has too few fields"
+                               .format(lineNum, libId))
                     continue
                 address = int(fields[1], 16)
                 symbol = fields[3]
@@ -314,12 +320,13 @@ class DiskCacheThread(threading.Thread):
                 fields = line.split(" ", 4)
                 if len(fields) < 5:
                     logger.log(logLevel.WARNING,
-                        "FUNC line {} in {} has too few fields".format(lineNum, libId))
+                               "FUNC line {} in {} has too few fields"
+                               .format(lineNum, libId))
                     continue
                 address = int(fields[1], 16)
                 symbol = fields[4]
                 symMap[address] = symbol
-        sortedAddresses = sorted(symMap.keys(), reverse = True)
+        sortedAddresses = sorted(symMap.keys(), reverse=True)
         out.write("DiskCache v.1\n")
         for address in sortedAddresses:
             out.write(hex(address))
@@ -336,7 +343,7 @@ class DiskCacheThread(threading.Thread):
                 firstLine = symFile.next().rstrip()
                 if firstLine == "DiskCache v.1":
                     # Special DiskCache symbol file
-                    offsets.sort(reverse = True)
+                    offsets.sort(reverse=True)
                     nextOffset = offsets.pop(0)
 
                     for line in symFile:
@@ -359,13 +366,14 @@ class DiskCacheThread(threading.Thread):
                             fields = line.split(" ", 3)
                             if len(fields) < 4:
                                 logger.log(logLevel.WARNING,
-                                    "PUBLIC line {} in {} has too few fields".format(lineNum, path))
+                                           "PUBLIC line {} in {} has too few fields"
+                                           .format(lineNum, path))
                                 continue
                             address = int(fields[1], 16)
                             symbol = fields[3]
                             for index in xrange(len(offsets)):
                                 offset, closest = offsets[index]
-                                if address <= offset and (closest == None or address > closest):
+                                if address <= offset and (closest is None or address > closest):
                                     offsets[index] = [offset, address]
                                     symbols[offset] = symbol
                         elif line.startswith("FUNC "):
@@ -373,24 +381,25 @@ class DiskCacheThread(threading.Thread):
                             fields = line.split(" ", 4)
                             if len(fields) < 5:
                                 logger.log(logLevel.WARNING,
-                                    "FUNC line {} in {} has too few fields".format(lineNum, path))
+                                           "FUNC line {} in {} has too few fields"
+                                           .format(lineNum, path))
                                 continue
                             address = int(fields[1], 16)
                             symbol = fields[4]
                             for index in xrange(len(offsets)):
                                 offset, closest = offsets[index]
-                                if address <= offset and (closest == None or address > closest):
+                                if address <= offset and (closest is None or address > closest):
                                     offsets[index] = [offset, address]
                                     symbols[offset] = symbol
                 else:
                     logger.log(logLevel.ERROR,
-                        "Unrecognizable type of symbol file {}".format(path))
+                               "Unrecognizable type of symbol file {}".format(path))
         except Exception as e:
             ex_type, ex, tb = sys.exc_info()
             stack = traceback.extract_tb(tb)
             logger.log(logLevel.ERROR,
-                "Exception when reading symbols from {}: {} STACK: {}".format(path, e,
-                                                                                                                                            stack))
+                       "Exception when reading symbols from {}: {} STACK: {}"
+                       .format(path, e, stack))
         return symbols
 
     # Carries out the debug action specified by the first request in the work
@@ -411,7 +420,7 @@ class DiskCacheThread(threading.Thread):
         if action == "cacheAddRaw":
             self.cache.evict(cachePath)
             if self.downloadToCache(libName, breakpadId, symbolFilename, cachePath,
-                                                            saveRaw = True):
+                                    saveRaw=True):
                 response['path'] = cachePath
             else:
                 response['path'] = None
@@ -421,11 +430,12 @@ class DiskCacheThread(threading.Thread):
             self.cache.evict(cachePath)
             response['success'] = True
         elif action == "cacheExists":
-            response['exists'] = self.cache.retrieve(cachePath) != None
+            response['exists'] = (self.cache.retrieve(cachePath) is not None)
         else:
             logger.log(logLevel.ERROR, "{} Invalid action: {}".format(id, action))
             response['message'] = "Invalid action"
         return response
+
 
 class LRUCache:
     def __init__(self):
@@ -435,7 +445,7 @@ class LRUCache:
         self.size = 0
         self.maxSize = config['maxSizeMB'] * 1024 * 1024
 
-    def iterator(self, newestFirst = True):
+    def iterator(self, newestFirst=True):
         if newestFirst:
             current = self.oldestEntry
             while current:
@@ -448,7 +458,7 @@ class LRUCache:
                 current = current.older
 
     # For testing/logging
-    def toString(self, newestFirst = True):
+    def toString(self, newestFirst=True):
         output = "["
         firstEntry = True
         for entry in self.iterator(newestFirst):
@@ -461,7 +471,7 @@ class LRUCache:
         return output
 
     def retrieve(self, key):
-        if not key in self.cache:
+        if key not in self.cache:
             return None
         entry = self.cache[key]
         if entry is not self.newestEntry:
@@ -496,8 +506,8 @@ class LRUCache:
         if not self.oldestEntry:
             return
         toEvict = self.oldestEntry
-        logger.log(logLevel.DEBUG, 
-            "Evicting {} from the cache (cache size = {})".format(toEvict.path, self.size))
+        logger.log(logLevel.DEBUG, "Evicting {} from the cache (cache size = {})"
+                   .format(toEvict.path, self.size))
         self.oldestEntry = toEvict.newer
         if self.oldestEntry:
             self.oldestEntry.older = None
@@ -509,14 +519,14 @@ class LRUCache:
             os.remove(toEvict.path)
         except:
             logger.log(logLevel.ERROR, "Unable to delete file evicted from cache: {}"
-                .format(toEvict.path))
+                       .format(toEvict.path))
 
     def evict(self, key):
         if key not in self.cache:
             return
         toEvict = self.cache[key]
         logger.log(logLevel.DEBUG,
-            "Evicting {} from the cache by request".format(toEvict.path))
+                   "Evicting {} from the cache by request".format(toEvict.path))
         if toEvict is self.oldestEntry:
             self.oldestEntry = toEvict.newer
             if self.oldestEntry:
@@ -531,13 +541,14 @@ class LRUCache:
             os.remove(toEvict.path)
         except:
             logger.log(logLevel.ERROR, "Unable to delete file evicted from cache: {}"
-                .format(toEvict.path))
+                       .format(toEvict.path))
+
 
 class CacheEntry:
     def __init__(self, path):
         self.path = path
         self.size = os.path.getsize(path)
-        self.older = None # prev pointer
-        self.newer = None # next pointer
+        self.older = None  # prev pointer
+        self.newer = None  # next pointer
 
 diskCache = DiskCache()

@@ -1,0 +1,7 @@
+[flake8]
+ignore = 
+    E402, # Allow module imports after code because test files modify the
+          # path before importing
+exclude =
+    .git,
+max-line-length = 99

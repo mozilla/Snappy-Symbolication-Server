@@ -8,6 +8,7 @@ import tornado.web
 import sys
 import traceback
 
+
 class RequestHandler(tornado.web.RequestHandler):
     def prepare(self):
         xForwardIP = self.request.headers.get("X-Forwarded-For")
@@ -15,8 +16,7 @@ class RequestHandler(tornado.web.RequestHandler):
         self.requestId = uuid.uuid4()
 
     def log(self, level, message):
-        logger.log(level, "{} {}".format(self.requestId, message),
-            remoteIP = self.remoteIP)
+        logger.log(level, "{} {}".format(self.requestId, message), remoteIP=self.remoteIP)
 
     def sendHeaders(self, code):
         self.set_status(code)
@@ -50,15 +50,14 @@ class RequestHandler(tornado.web.RequestHandler):
     @tornado.gen.coroutine
     def post(self):
         uri = self.request.uri
-        
+
         self.log(logLevel.INFO, "Processing POST request: {}".format(uri))
 
         try:
             requestBody = self.request.body
             self.log(logLevel.DEBUG, "Request body: {}".format(requestBody))
 
-            requestBody = validateRequest(self.request.remote_ip, requestBody,
-                                                                        self.log)
+            requestBody = validateRequest(self.request.remote_ip, requestBody, self.log)
             if not requestBody:
                 self.log(logLevel.ERROR, "Unable to validate request body")
                 self.sendHeaders(400)
@@ -70,7 +69,7 @@ class RequestHandler(tornado.web.RequestHandler):
             ex_type, ex, tb = sys.exc_info()
             stack = traceback.extract_tb(tb)
             self.log(logLevel.ERROR, "Could not formulate response: {}: {} STACK: {}"
-                .format(ex_type, e, stack))
+                     .format(ex_type, e, stack))
             self.sendHeaders(500)
             return
 

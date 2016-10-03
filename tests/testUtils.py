@@ -123,21 +123,12 @@ def getDefaultConfig():
         config["quickstart"].loadFile(TEST_CONFIG_PATH)
     except IOError:
         pass
-    # By default, start all servers locally in such a way that they can talk to
-    # each other as expected. Force all servers to restart everytime.
-    config['SymServer']['memcachedServers'] = \
-        ["127.0.0.1:{}".format(config['quickstart']['memcached']['port'])]
-    config['SymServer']['DiskCacheServer'] = \
-        "127.0.0.1:{}".format(config['DiskCache']['port'])
-    config['quickstart']['memcached']['listenAddress'] = "0.0.0.0"
-    if config['quickstart']['memcached']['maxMemoryMB'] < 64:
-        config['quickstart']['memcached']['maxMemoryMB'] = 64
-    config['quickstart']['memcached']['start'] = True
-    config['quickstart']['memcached']['restart'] = True
+    # Some options will be forced so that testing can work as expected
     config['quickstart']['DiskCache']['start'] = True
     config['quickstart']['DiskCache']['restart'] = True
     config['quickstart']['SymServer']['start'] = True
     config['quickstart']['SymServer']['restart'] = True
+    config['quickstart']['Docker']['enable'] = False
     return config
 
 

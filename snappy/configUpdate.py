@@ -2,7 +2,7 @@
 def configUpdate(original, update):
     for key in update:
         if key not in original:
-            raise KeyError("Attempt to update key {} which does not exist".format(key))
+            continue  # Silently skip keys that should not be in this config
         if isinstance(original[key], dict):
             if not isinstance(update[key], dict):
                 raise TypeError("Attempt to update key {} with a non dict type".format(key))

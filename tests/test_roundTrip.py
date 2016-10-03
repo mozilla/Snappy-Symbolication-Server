@@ -2,6 +2,7 @@ import unittest
 import os
 import shutil
 import json
+import memcache
 
 import testUtils
 testUtils.addSymServerToPath()
@@ -14,6 +15,7 @@ class RoundTrip(unittest.TestCase):
         self.tempDirs = testUtils.setConfigToUseTempDirs(self.config)
         if not quickstart.quickstart(configJSON=json.dumps(self.config)):
             self.fail("Unable to start servers")
+        memcache.Client(self.config['SymServer']['memcachedServers'], debug=0).flush_all();
 
     def tearDown(self):
         if not quickstart.quickstart(configJSON=json.dumps(self.config), stop=True):

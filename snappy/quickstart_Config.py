@@ -1,9 +1,20 @@
 import json
+from configUpdate import configUpdate
 
 class Config(dict):
   def __init__(self, *args, **kwargs):
     dict.__init__(self, *args, **kwargs)
     # Load defaults:
+    self['verbose'] = False
+    self['Docker'] = {
+      "enable": False,
+      "publish": {
+        "memcached": False,
+        "DiskCache": False,
+        "SymServer": True
+      },
+      "apiSocket": "unix:///var/run/docker.sock"
+    }
     self['memcached'] = {
       "start": True,
       "restart": False,
@@ -34,12 +45,7 @@ class Config(dict):
   def loadJSON(self, JSON):
     config = json.loads(JSON)
     config = config['quickstart']
-    if 'memcached' in config:
-      self['memcached'].update(config['memcached'])
-    if 'DiskCache' in config:
-      self['DiskCache'].update(config['DiskCache'])
-    if 'SymServer' in config:
-      self['SymServer'].update(config['SymServer'])
+    configUpdate(self, config)
     self.sanitize()
     try:
       del self['configPath']

@@ -28,7 +28,7 @@ class StressTest(unittest.TestCase):
       self.fail("Unable to start servers")
 
   def tearDown(self):
-    if not quickstart.quickstart(stop = True):
+    if not quickstart.quickstart(configJSON = json.dumps(self.config), stop = True):
       print "WARNING: Servers were not properly stopped!"
     for tempDir in self.tempDirs:
       if os.path.exists(tempDir):

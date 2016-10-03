@@ -30,9 +30,19 @@
     }
   },
   "quickstart": {
+    "verbose": false,
+    "Docker": {
+      "enable": false,
+      "restart": false,
+      "publish": {
+        "memcached": false,
+        "DiskCache": false,
+        "SymServer": true
+      },
+      "apiSocket": "unix:///var/run/docker.sock"
+    },
     "memcached": {
       "start": true,
-      "restart": false,
       "binary": "memcached",
       "port": 11211,
       "listenAddress": "0.0.0.0",

@@ -8,9 +8,11 @@ import urllib2
 import contextlib
 import time
 import uuid
+import json
 try:
   import psutil
   import memcache
+  import docker
 except ImportError:
   pass # We will address this later in |missingDependencies|
 
@@ -30,6 +32,9 @@ PID_DIR = os.path.join(SRC_DIR, "pids")
 MEMCACHED_PIDFILE = os.path.join(PID_DIR, "memcached.pid")
 DISKCACHE_PIDFILE = os.path.join(PID_DIR, "DiskCache.pid")
 SYMSERVER_PIDFILE = os.path.join(PID_DIR, "SymServer.pid")
+DOCKER_CACHE_FILE = os.path.join(SRC_DIR, ".docker-cache")
+DOCKER_IMAGE_NAME = "snappy"
+DOCKER_CONTAINER_NAME = "snappy"
 
 def main():
   missing = missingDependencies()
@@ -46,18 +51,27 @@ def main():
     "config JSON file.")
   group.add_argument('--configJSON', metavar = "JSON", help = "Literal JSON to "
     "load configuration from rather than a configuration file.")
-  group.add_argument('--stop', action = "store_true", help = "If specified, "
+  parser.add_argument('--stop', action = "store_true", help = "If specified, "
     "this script will stop all servers rather than starting them. Note that "
     "this will not necessarily work if quickstart was not used to start the "
     "servers.")
+  parser.add_argument('--foreground', '-F', action = "store_true",
+    help = "Runs in the foreground rather than as a daemon.")
+  parser.add_argument('--dockerRebuild', '-R', action = "store_true",
+    help = "Forces a rebuild of the docker image.")
+  parser.add_argument('--verbose', '-v', action = "store_true",
+    help = "Increases output.")
   args = parser.parse_args()
-  if quickstart(args.config, args.configJSON, bool(args.stop)):
+  if quickstart(args.config, args.configJSON, bool(args.stop), args.foreground,
+                args.dockerRebuild, args.verbose):
     return 0
   else:
     return -1
 
-def quickstart(configPath = None, configJSON = None, stop = False):
-  """ Only one argument should be specified.
+def quickstart(configPath = None, configJSON = None, stop = False,
+  foreground = False, dockerRebuild = False, verbose = False):
+  """ Of the first two arguments, configPath, configJSON, exactly one should be
+  specified.
   """
   if not os.path.exists(PID_DIR):
     os.makedirs(PID_DIR)
@@ -66,16 +80,25 @@ def quickstart(configPath = None, configJSON = None, stop = False):
     config.loadFile(configPath)
   elif configJSON:
     config.loadJSON(configJSON)
+  if verbose:
+    config['verbose'] = True
 
-  if not stopServers(config, stopAll = stop):
-    return False
-
-  if not stop:
-    if not startServers(config):
+  if config["Docker"]["enable"]:
+    if stop:
+      if not stopDocker(config):
+        return False
+    else:
+      if not startDocker(config, foreground, dockerRebuild):
+        return False
+  else:
+    if not stopServers(config, stopAll = stop):
       return False
-    if not serversResponding(config):
-      return False
-
+    if not stop:
+      if not startServers(config, foreground):
+        return False
+      if not foreground:
+        if not serversResponding(config):
+          return False
   return True
 
 def missingDependencies():
@@ -102,10 +125,15 @@ def missingDependencies():
     assert psutil
   except ImportError:
     missing.append("psutil")
+  try:
+    import docker
+    assert docker
+  except ImportError:
+    missing.append("docker-py")
 
   return missing
 
-def stopServers(config, stopAll):
+def stopServers(config, stopAll = False):
   pidfiles = []
   if stopAll or not config['SymServer']['start'] or config['SymServer']['restart']:
     pidfiles.append(SYMSERVER_PIDFILE)
@@ -140,21 +168,33 @@ def stopServers(config, stopAll):
   print "Servers stopped"
   return True
 
-def startServers(config):
+def startServers(config, foreground = False):
+  startSymServer = config['SymServer']['start'] and not symServerRunning()
+  foregroundSymServer = foreground and startSymServer
+  startDiskCache = config['DiskCache']['start'] and not diskCacheRunning()
+  foregroundDiskCache = foreground and startDiskCache and not foregroundSymServer
+  startMemcached = config['memcached']['start'] and not memcachedRunning()
+  foregroundMemcached = foreground and startMemcached and \
+                        not foregroundSymServer and not foregroundDiskCache
+
   # This one is easy because it already has an option to start as a daemon
-  if config['memcached']['start'] and not memcachedRunning():
+  if startMemcached:
     command = [
       str(config['memcached']['binary']),
-      "-d",
       "-U", "0",
       "-l", str(config['memcached']["listenAddress"]),
       "-m", str(config['memcached']["maxMemoryMB"]),
       "-p", str(config['memcached']["port"]),
       "-P", str(MEMCACHED_PIDFILE)
     ]
+    if not foregroundMemcached:
+      command.append("-d")
     print "Starting memcached with command: {}".format(command)
-    with open(os.devnull, 'w') as devnull:
-      subprocess.call(command, stdout = devnull, stderr = devnull)
+    if foregroundMemcached:
+      subprocess.call(command)
+    else:
+      with open(os.devnull, 'w') as devnull:
+        subprocess.call(command, stdout = devnull, stderr = devnull)
 
   # Get the options to specify the configuration to the SymServer and DiskCache
   configOptions = []
@@ -168,7 +208,7 @@ def startServers(config):
   # The remaining servers require some weirdness in order to start them as
   # daemons
   # Mechanism was inspired by http://stackoverflow.com/a/33804441/4103025
-  if config['DiskCache']['start'] and not diskCacheRunning():
+  if startDiskCache:
     command = [
       "python",
       str(DISKCACHE_PATH),
@@ -176,7 +216,10 @@ def startServers(config):
     ]
     command.extend(configOptions)
     print "Starting DiskCache with command: {}".format(command)
-    runDaemon(command)
+    if foregroundDiskCache:
+      subprocess.call(command)
+    else:
+      runDaemon(command)
 
   if config['SymServer']['start'] and not symServerRunning():
     command = [
@@ -186,7 +229,10 @@ def startServers(config):
     ]
     command.extend(configOptions)
     print "Starting SymServer with command: {}".format(command)
-    runDaemon(command)
+    if foregroundSymServer:
+      subprocess.call(command)
+    else:
+      runDaemon(command)
   return True
 
 def runDaemon(command):
@@ -235,16 +281,10 @@ def serversResponding(config):
       print "Timeout exceeded waiting for DiskCache to start"
       return False
 
-    # The config may not have a value for |port|. By loading the config the same
-    # way that DiskCache loads it, we guarantee that we have the same value
-    # that it has.
-    if 'configPath' in config:
-      DiskCache.config.loadFile(config['configPath'])
-    elif 'configJSON' in config:
-      DiskCache.config.loadJSON(config['configJSON'])
+    port = getDiskCacheConfig(config)['port']
 
     while time.time() < timeoutEnd:
-      response = sendGetRequest(DiskCache.config['port'])
+      response = sendGetRequest(port)
       if response:
         break
       time.sleep(POLL_TIME_SEC)
@@ -261,14 +301,10 @@ def serversResponding(config):
       print "Timeout exceeded waiting for SymServer to start"
       return False
 
-    # Make sure we have a port value to contact SymServer on.
-    if 'configPath' in config:
-      SymServer.config.loadFile(config['configPath'])
-    elif 'configJSON' in config:
-      SymServer.config.loadJSON(config['configJSON'])
+    port = getSymServerConfig(config)['port']
 
     while time.time() < timeoutEnd:
-      response = sendGetRequest(SymServer.config['port'])
+      response = sendGetRequest(port)
       if response:
         break
       time.sleep(POLL_TIME_SEC)
@@ -308,6 +344,197 @@ def sendGetRequest(port):
     return {'code': err.code, 'data': None}
   except urllib2.URLError:
     return None
+
+def stopDocker(config):
+  if not dockerRunning(config):
+    print "Docker already stopped."
+    return True
+
+  dockerApi = getDockerApi(config)
+  try:
+    dockerApi.stop(container = DOCKER_CONTAINER_NAME)
+  except Exception as ex:
+    print "Failed to stop Docker", ex
+    return False
+
+  if dockerRunning(config):
+    print "Failed to stop Docker"
+    return False
+
+  print "Docker stopped"
+  return True
+
+def startDocker(config, foreground = False, forceRebuild = False):
+  dockerApi = getDockerApi(config)
+
+  oldDockerConfig = getOldDockerConfigString()
+  imageInfo = dockerImageInfo(config)
+  rebuild = forceRebuild or not imageInfo or oldDockerConfig == None
+
+  containerInfo = dockerContainerInfo(config)
+  dockerConfig = makeDockerConfigString(config)
+  remakeContainer = rebuild or not containerInfo or dockerConfig != oldDockerConfig
+
+  if rebuild or remakeContainer:
+    stopDocker(config)
+  else:
+    if dockerRunning(config):
+      print "Docker already running!"
+      return True
+
+  if rebuild:
+    print "Building Docker image"
+    try:
+      dockerApi.remove_image(image = DOCKER_IMAGE_NAME, force = True)
+    except docker.errors.NotFound:
+      # The image just doesn't exist yet
+      pass
+
+    for output in dockerApi.build(path = SRC_DIR, tag = DOCKER_IMAGE_NAME):
+      if config['verbose']:
+        print json.loads(output)["stream"],
+
+  if remakeContainer:
+    print "Creating Docker Container"
+    try:
+      dockerApi.remove_container(image = DOCKER_CONTAINER_NAME, force = True)
+    except docker.errors.NotFound:
+      # The container just doesn't exist yet
+      pass
+
+    internalPorts = []
+    publishedPortMapping = {}
+    if config["memcached"]["start"]:
+      port = config["memcached"]["port"]
+      internalPorts.append(port)
+      if config["Docker"]["publish"]["memcached"]:
+        publishedPortMapping[port] = port
+    if config["DiskCache"]["start"]:
+      port = getDiskCacheConfig(config)["port"]
+      internalPorts.append(port)
+      if config["Docker"]["publish"]["DiskCache"]:
+        publishedPortMapping[port] = port
+    if config["SymServer"]["start"]:
+      port = getSymServerConfig(config)["port"]
+      internalPorts.append(port)
+      if config["Docker"]["publish"]["SymServer"]:
+        publishedPortMapping[port] = port
+    hostConfig = dockerApi.create_host_config(port_bindings = publishedPortMapping)
+
+    quickstartArgs = ["--foreground", "--configJSON", dockerConfig]
+
+    container = dockerApi.create_container(image = DOCKER_IMAGE_NAME,
+                                           ports = internalPorts,
+                                           host_config = hostConfig,
+                                           detach = not foreground,
+                                           name = DOCKER_CONTAINER_NAME,
+                                           command = quickstartArgs)
+    saveDockerCacheFile(dockerConfig)
+
+  if dockerRunning(config):
+    print "Docker already running"
+  else:
+    print "Starting Container"
+    dockerApi.start(container = DOCKER_CONTAINER_NAME)
+
+  return True
+
+gDockerApi = None
+def getDockerApi(config):
+  global gDockerApi
+  if gDockerApi:
+    return gDockerApi
+  gDockerApi = docker.Client(base_url = config["Docker"]["apiSocket"])
+  return gDockerApi
+
+def getOldDockerConfigString():
+  """ Returns the configuration used to build the last docker container as a
+  string. Returns |None| if there is no old configuration
+  """
+  try:
+    with open(DOCKER_CACHE_FILE, 'r') as fp:
+      return fp.read()
+  except (OSError, IOError):
+    pass
+  return None
+
+def saveDockerCacheFile(dockerConfig):
+  with open(DOCKER_CACHE_FILE, 'w') as fp:
+    fp.write(dockerConfig)
+
+def dockerContainerInfo(config):
+  """ Returns a dictionary of container info, or |None| if there is no container
+  """
+  dockerApi = getDockerApi(config)
+  try:
+    return dockerApi.inspect_container(container = DOCKER_CONTAINER_NAME)
+  except docker.errors.NotFound:
+    pass
+  return None
+
+def dockerRunning(config):
+  containerInfo = dockerContainerInfo(config)
+  if not containerInfo:
+    return False
+  if containerInfo["State"]["Status"] == "running":
+    return True
+  return False
+
+def dockerImageInfo(config):
+  """ Returns a dictionary of image info, or |None| if there is no image
+  """
+  dockerApi = getDockerApi(config)
+  try:
+    return dockerApi.inspect_image(container = DOCKER_IMAGE_NAME)
+  except docker.errors.NotFound:
+    pass
+  return None
+
+def makeDockerConfigString(config):
+  """ Make the configuration to pass to the quickstart within Docker
+  """
+  if "configPath" in config:
+    with open(config["configPath"], "r") as fp:
+      dockerConfig = fp.read()
+  elif "configJSON" in config:
+    dockerConfig = config["configJSON"]
+  else:
+    raise KeyError("No configuration source in quickstart configuration "
+      "(Should contain 'configPath' or 'configJSON')")
+  dockerConfig = json.loads(dockerConfig)
+  dockerConfig["quickstart"]["Docker"]["enable"] = False # No recursing!
+  dockerConfig = json.dumps(dockerConfig, sort_keys = True)
+  return dockerConfig
+
+gDiskCacheConfig = None
+def getDiskCacheConfig(config):
+  global gDiskCacheConfig
+  if gDiskCacheConfig:
+    return gDiskCacheConfig
+  # The config may not have a value for |port|. By loading the config the same
+  # way that DiskCache loads it, we guarantee that we have the same value
+  # that it has.
+  if 'configPath' in config:
+    DiskCache.config.loadFile(config['configPath'])
+  elif 'configJSON' in config:
+    DiskCache.config.loadJSON(config['configJSON'])
+  gDiskCacheConfig = DiskCache.config
+  return gDiskCacheConfig
+
+gSymServerConfig = None
+def getSymServerConfig(config):
+  global gSymServerConfig
+  if gSymServerConfig:
+    return gSymServerConfig
+  # The config may not have a value for |port|. By loading the config the same
+  # way that SymServer loads it, we guarantee that we have the same value
+  # that it has.
+  if 'configPath' in config:
+    SymServer.config.loadFile(config['configPath'])
+  elif 'configJSON' in config:
+    SymServer.config.loadJSON(config['configJSON'])
+  gSymServerConfig = SymServer.config
+  return gSymServerConfig
 
 if __name__ == '__main__':
   multiprocessing.freeze_support()

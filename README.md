@@ -8,20 +8,52 @@ server-side symbol files (.SYM files).
 This project is intended as a drop-in replacement for
 [Snappy Symbolication Server](https://github.com/mozilla/Snappy-Symbolication-Server/)
 
-Quick Start Guide
------------------
+Quick Start without Docker
+--------------------------
 
-1. Install [Python 2.7](https://www.python.org/downloads/) if it is not already
-   installed
-2. Install dependencies:
-   `python -m pip install tornado futures python-memcached psutil`
+1. Install [Python 2.7](https://www.python.org/downloads/) and
+   [pip](https://pip.pypa.io/en/stable/installing/) if they are not already
+   installed. Pip must be version 8.0 or above. It can be upgraded using
+   `pip install -U 'pip>=8'`.
+2. Install dependencies: `pip install -r requirements.txt`. You may want to do
+   this in a
+   [virtual environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/)
 3. Install [memcached](http://www.memcached.org/downloads)
 4. Copy/create a configuration file and set values appropriately. See
    [Configuration File](#configuration-file)
 5. Run `python quickstart.py -c [configuration file]`
 
-The server(s) can then be stopped with `python quickstart.py --stop`. This will
-only work if quickstart was used to start the server(s).
+The server(s) can then be stopped with
+`python quickstart.py -c [configuration file] --stop`.
+This will only work if quickstart was used to start the server(s).
+
+Quick Start with Docker
+-----------------------
+
+1. Install [Docker](https://docs.docker.com/engine/installation)
+2. It may be necessary that your user be in the Docker group. This can be
+   accomplished in Linux with `sudo usermod -aG docker $(whoami)`. You must log
+   out for changes to take effect.
+3. Install [Python 2.7](https://www.python.org/downloads/) and
+   [pip](https://pip.pypa.io/en/stable/installing/) if they are not already
+   installed. Pip must be version 8.0 or above. It can be upgraded using
+   `pip install -U 'pip>=8'`.
+4. Install dependencies: `pip install -r requirements.txt`. You may want to do
+   this in a
+   [virtual environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/)
+5. Copy/create a configuration file and set values appropriately. See
+   [Configuration File](#configuration-file). To use Docker, it is important
+   that the `quickstart.Docker.enable = true`.
+6. Run `python quickstart.py -c [configuration file]`
+
+Quickstart attempts to do some caching in order to recreate the image and
+container only when necessary. The image will be built only once. The container
+will be recreated any time that the passed configuration changes. You can
+force a full rebuild with `python quickstart.py -c [configuration file] -R`.
+A full rebuild should be done anytime that the code changes.
+
+The docker container can be stopped with
+`python quickstart.py -c [configuration file] --stop`.
 
 DiskCache
 ---------
@@ -188,6 +220,28 @@ All configuration values should be specified as strings unless otherwise noted.
         - `"maxFileSizeMB"` An integer type describing how large logs can get
           (in megabytes) before being rotated.
 - `"quickstart"` Configuration options related to the quickstart script
+    - `"verbose"` Must be a boolean type. If set to `true`, quickstart will
+      display additional output. Useful for debugging. Setting this to `true`
+      is equivilant to passing `--verbose` to the quickstart script.
+    - `"Docker"` Configuration options related to Docker
+        - `"enable"` Must be a boolean type. If set to `true`, quickstart
+          will start the servers within a Docker container
+        - `"publish"`
+            - `"memcached"` Must be a boolean type. If set to `true`, the port
+              that memcached is running on will be exposed to the host system.
+              If set to `false`, memcached will be accessible only from within
+              the Docker container.
+            - `"DiskCache"` Must be a boolean type. If set to `true`, the port
+              that DiskCache is running on will be exposed to the host system.
+              If set to `false`, DiskCache will be accessible only from within
+              the Docker container.
+            - `"SymServer"` Must be a boolean type. If set to `true`, the port
+              that SymServer is running on will be exposed to the host system.
+              If set to `false`, SymServer will be accessible only from within
+              the Docker container
+        - `"apiSocket"` The socket where the
+          [Docker API](https://docs.docker.com/engine/reference/api/docker_remote_api/)
+          is available.
     - `"memcached"` Configuration options related to how memcached is run
       by quickstart. **Note:** this has no effect on starting memcached in other
       ways.

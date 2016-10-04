@@ -2,6 +2,7 @@
 ##################################################
 *.json
 !/sample_config.json
+!/travis_config.json
 !/tests/DiskCacheHitRequests.json
 !/tests/cacheMissRequests.json
 

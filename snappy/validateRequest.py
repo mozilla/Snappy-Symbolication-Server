@@ -84,9 +84,9 @@ def validateRequest(remoteIP, data, logger):
         logger(logLevel.DEBUG,
           "A stack frame module index is out of range")
         return None
-      if not isinstance(frame[1], int):
+      if not isinstance(frame[1], int) and not isinstance(frame[1], long):
         logger(logLevel.DEBUG,
-          "A stack frame offset is not an integer")
+          "A stack frame offset is not an integer or a long")
         return None
 
     return request

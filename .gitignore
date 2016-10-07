@@ -8,6 +8,7 @@
 
 # Python generated files
 ##################################################
+*.pyo
 *.pyc
 
 # Generated logs

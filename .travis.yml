@@ -1,0 +1,11 @@
+language: python
+python:
+    - "2.7"
+services:
+    - memcached
+install:
+    - pip install -U 'pip>=8'
+    - pip install -r requirements.txt
+script:
+    - python -m flake8 --config=./.flake8 .
+    - python ./runTests.py -c ./travis_config.json

@@ -11,7 +11,7 @@ def configUpdate(original, update):
             if not isinstance(update[key], list):
                 raise TypeError("Attempt to update key {} with a non list type".format(key))
             original[key] = update[key]
-        elif isinstance(original[key], int):
+        elif isinstance(original[key], (int, long)):
             original[key] = int(update[key])
         elif isinstance(original[key], float):
             original[key] = float(update[key])

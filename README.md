@@ -5,8 +5,8 @@ Provides a Web server for symbolicating Firefox stacks. It matches PC addresses
 to modules in memory and looks up the corresponding function names in
 server-side symbol files (.SYM files).
 
-This project is intended as a drop-in replacement for
-[Snappy Symbolication Server](https://github.com/mozilla/Snappy-Symbolication-Server/)
+This project is intended as a drop-in replacement for the old
+[Snappy Symbolication Server](https://github.com/mozilla/Snappy-Symbolication-Server/tree/e38f3fdd7b49ab181a95bd76bbd3a5f4fea97276)
 
 Quick Start without Docker
 --------------------------
@@ -295,8 +295,8 @@ started properly.
     * `-m` Maximum memory usage of the cache in megabytes
     * `-P` Write PID to the specified pidfile. Only valid when combined with
       `-d`. quickstart sets this to "pids/memcached.pid"
-2. Start DiskCache with `python DiskCache.py -c [config]`
-3. Start SymServer with `python SymServer.py -c [config]`
+2. Start DiskCache with `python snappy/DiskCache.py -c [config]`
+3. Start SymServer with `python snappy/SymServer.py -c [config]`
 4. Try using curl to send a test request as described in
    [SymServer](#symserver).
 
@@ -417,10 +417,3 @@ property describes what the debug request does.
     - Response properties:
         - `"success"` Will be set to `true` if cache now does not contain the
           cache entry.
-
-To do
------
-
-- Evict files from cache if they no longer exist
-- Enforce test timeouts
-- Add ability to save log files from tests rather than discarding them

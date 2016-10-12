@@ -12,6 +12,7 @@ import urllib2
 import contextlib
 from StringIO import StringIO
 import gzip
+import zlib
 
 
 class DiskCache:
@@ -250,59 +251,79 @@ class DiskCacheThread(threading.Thread):
         return path
 
     def downloadToCache(self, libName, breakpadId, symbolFilename, destPath, saveRaw=False):
-        destDir = os.path.dirname(destPath)
-        if not os.path.exists(destDir):
-            os.makedirs(destDir)
-
-        alreadyTried = []
+        urlsToRetry = self.symbolURLs
         for attempt in xrange(config['retries']):
-            for symbolURL in self.symbolURLs:
-                if symbolURL in alreadyTried:
+            symbolURLs = urlsToRetry
+            urlsToRetry = []
+            for symbolURL in symbolURLs:
+                url = self.getSymbolURL(symbolURL, libName, breakpadId, symbolFilename)
+                success, exists, data = self.retrieveFile(url)
+                if not success:
+                    urlsToRetry.append(symbolURL)
+                    continue
+                if not exists:
+                    # Don't retry this server if we know the file is not on it
                     continue
 
-                url = self.getSymbolURL(symbolURL, libName, breakpadId, symbolFilename)
-                try:
-                    with contextlib.closing(urllib2.urlopen(url)) as response:
-                        responseCode = response.getcode()
-                        if responseCode == 404:
-                            # If the server explicitly said that it doesn't have this
-                            # symbol file, do not try again
-                            alreadyTried.append(symbolURL)
-                            logger.log(logLevel.DEBUG,
-                                       "Got HTTP Code 404 when requesting symbol file at {}"
-                                       .format(url))
-                            continue
-                        if responseCode != 200:
-                            logger.log(logLevel.WARNING,
-                                       "Got HTTP Code {} when requesting symbol file at {}"
-                                       .format(responseCode, url))
-                            continue
-                        headers = response.info()
-                        contentEncoding = headers.get("Content-Encoding", "").lower()
-                        if contentEncoding in ("gzip", "x-gzip", "deflate"):
-                            with contextlib.closing(StringIO(response.read())) as dataStream:
-                                try:
-                                    with gzip.GzipFile(fileobj=dataStream) as f:
-                                        data = f.read()
-                                except Exception:
-                                    data = dataStream.decode('zlib')
-                        else:
-                            data = response.read()
+                if not saveRaw:
                     libId = "{}/{}/{}".format(libName, breakpadId, symbolFilename)
+                    data = data.splitlines()
+                    data = self.makeSymMap(data, libId)
+                try:
+                    destDir = os.path.dirname(destPath)
+                    if not os.path.exists(destDir):
+                        os.makedirs(destDir)
                     with open(destPath, 'wb') as fp:
-                        if saveRaw:
-                            fp.write(data)
-                        else:
-                            self.writeSymMap(data.splitlines(), fp, libId)
-                    self.cache.add(destPath)
-                    return True
-                except Exception as e:
-                    logger.log(logLevel.ERROR,
-                               "Exception when requesting symbol file at {}: {}"
-                               .format(url, e))
-                    continue
+                        fp.write(data)
+                except (OSError, IOError) as e:
+                    logger.log(logLevel.ERROR, "Failed to write file {}: {}".format(destPath, e))
+                    return False
+
+                self.cache.add(destPath)
+                return True
+            logger.log(logLevel.DEBUG,
+                       "Retrying download of {}/{}/{}".format(libName, breakpadId, symbolFilename))
         # Ran out of URLs to try and exceeded number of attempts
         return False
+
+    def retrieveFile(self, url):
+        """ Retrieves a remote file. Returns a tuple: |success, exists, response|
+        |exists| will be set to |True| if the response is a 404 error.
+        |success| will be set to |False| if an exception occurs during the request or
+        the request received has a code other than 404 or 200. Code 404 is considered
+        a success because we successfully learned that the file does not exist on
+        the server.
+        |response| will be a string of response data. If |exists| or |success| is
+        |True|, the response string will be empty.
+        """
+        try:
+            with contextlib.closing(urllib2.urlopen(url)) as response:
+                responseCode = response.getcode()
+                if responseCode == 404:
+                    logger.log(logLevel.DEBUG,
+                               "Got HTTP Code 404 when requesting symbol file at {}".format(url))
+                    return True, False, ""
+                if responseCode != 200:
+                    logger.log(logLevel.WARNING,
+                               "Got HTTP Code {} when requesting symbol file at {}"
+                               .format(responseCode, url))
+                    return False, False, ""
+                return True, True, self.decodeResponse(response)
+        except IOError as e:
+            logger.log(logLevel.ERROR,
+                       "Exception when requesting symbol file at {}: {}".format(url, e))
+
+    def decodeResponse(self, response):
+        headers = response.info()
+        contentEncoding = headers.get("Content-Encoding", "").lower()
+        if contentEncoding in ("gzip", "x-gzip", "deflate"):
+            with contextlib.closing(StringIO(response.read())) as dataStream:
+                try:
+                    with gzip.GzipFile(fileobj=dataStream) as f:
+                        return f.read()
+                except zlib.error:
+                    return dataStream.decode('zlib')
+        return response.read()
 
     def getSymbolURL(self, symbolURL, libName, breakpadId, fileName):
         # The symbol URL must end with a "/" for this to work. This is why we added
@@ -313,7 +334,7 @@ class DiskCacheThread(threading.Thread):
             urllib.quote_plus(fileName)
         ])
 
-    def writeSymMap(self, data, out, libId):
+    def makeSymMap(self, data, libId):
         symMap = {}
         lineNum = 0
         for line in data:
@@ -341,12 +362,10 @@ class DiskCacheThread(threading.Thread):
                 symbol = fields[4]
                 symMap[address] = symbol
         sortedAddresses = sorted(symMap.keys(), reverse=True)
-        out.write("DiskCache v.1\n")
+        symmapString = "DiskCache v.1\n"
         for address in sortedAddresses:
-            out.write(hex(address))
-            out.write(" ")
-            out.write(symMap[address])
-            out.write("\n")
+            symmapString += "{} {}\n".format(hex(address), symMap[address])
+        return symmapString
 
     def getSymbols(self, path, offsets):
         if not offsets:

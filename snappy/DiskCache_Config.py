@@ -12,6 +12,7 @@ class Config(dict):
         self['maxSizeMB'] = 200
         self['port'] = 8888
         self['retries'] = 3
+        self['retryDelayMs'] = 500
         self['symbolURLs'] = [
             "https://s3-us-west-2.amazonaws.com/org.mozilla.crash-stats.symbols-public/v1/"
         ]

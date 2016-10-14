@@ -13,6 +13,7 @@ import contextlib
 from StringIO import StringIO
 import gzip
 import zlib
+import time
 
 
 class DiskCache:
@@ -251,42 +252,53 @@ class DiskCacheThread(threading.Thread):
         return path
 
     def downloadToCache(self, libName, breakpadId, symbolFilename, destPath, saveRaw=False):
-        urlsToRetry = self.symbolURLs
+        success, data = self.retrieveFile(libName, breakpadId, symbolFilename)
+        if not success:
+            return False
+
+        if not saveRaw:
+            libId = "{}/{}/{}".format(libName, breakpadId, symbolFilename)
+            data = data.splitlines()
+            data = self.makeSymMap(data, libId)
+        try:
+            destDir = os.path.dirname(destPath)
+            if not os.path.exists(destDir):
+                os.makedirs(destDir)
+            with open(destPath, 'wb') as fp:
+                fp.write(data)
+        except (OSError, IOError) as e:
+            logger.log(logLevel.ERROR, "Failed to write file {}: {}".format(destPath, e))
+            return False
+        self.cache.add(destPath)
+        return True
+
+    def retrieveFile(self, libName, breakpadId, symbolFilename):
+        """ Returns a tuple: |success, data|
+        """
+        skipURLs = []
         for attempt in xrange(config['retries']):
-            symbolURLs = urlsToRetry
-            urlsToRetry = []
-            for symbolURL in symbolURLs:
+            for symbolURL in self.symbolURLs:
+                if symbolURL in skipURLs:
+                    continue
                 url = self.getSymbolURL(symbolURL, libName, breakpadId, symbolFilename)
-                success, exists, data = self.retrieveFile(url)
+                success, exists, data = self.fetchURL(url)
+
                 if not success:
-                    urlsToRetry.append(symbolURL)
                     continue
                 if not exists:
                     # Don't retry this server if we know the file is not on it
+                    skipURLs.append(symbolURL)
                     continue
-
-                if not saveRaw:
-                    libId = "{}/{}/{}".format(libName, breakpadId, symbolFilename)
-                    data = data.splitlines()
-                    data = self.makeSymMap(data, libId)
-                try:
-                    destDir = os.path.dirname(destPath)
-                    if not os.path.exists(destDir):
-                        os.makedirs(destDir)
-                    with open(destPath, 'wb') as fp:
-                        fp.write(data)
-                except (OSError, IOError) as e:
-                    logger.log(logLevel.ERROR, "Failed to write file {}: {}".format(destPath, e))
-                    return False
-
-                self.cache.add(destPath)
-                return True
+                return True, data
+            if config['retryDelayMs']:
+                time.sleep(config['retryDelayMs'] / 1000)
             logger.log(logLevel.DEBUG,
                        "Retrying download of {}/{}/{}".format(libName, breakpadId, symbolFilename))
-        # Ran out of URLs to try and exceeded number of attempts
-        return False
+        logger.log(logLevel.DEBUG,
+                   "Unable to download {}/{}/{}".format(libName, breakpadId, symbolFilename))
+        return False, ""
 
-    def retrieveFile(self, url):
+    def fetchURL(self, url):
         """ Retrieves a remote file. Returns a tuple: |success, exists, response|
         |exists| will be set to |True| if the response is a 404 error.
         |success| will be set to |False| if an exception occurs during the request or
@@ -312,6 +324,7 @@ class DiskCacheThread(threading.Thread):
         except IOError as e:
             logger.log(logLevel.ERROR,
                        "Exception when requesting symbol file at {}: {}".format(url, e))
+            return False, False, ""
 
     def decodeResponse(self, response):
         headers = response.info()

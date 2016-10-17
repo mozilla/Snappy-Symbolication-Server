@@ -22,6 +22,8 @@
       "127.0.0.1:11211"
     ],
     "DiskCacheServer": "127.0.0.1:8888",
+    "retries": 3,
+    "retryDelayMs": 500,
     "log": {
       "path": "SymServer.log",
       "level": 30,

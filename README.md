@@ -184,6 +184,10 @@ All configuration values should be specified as strings unless otherwise noted.
       for details. This value must be an integer type.
     - `"port"` The port number to serve the DiskCache on. Must be an integer
       type.
+    - `"retries"` Must be an integer type. Sets the maximum number of retries
+      that will be attempted before giving up.
+    - `"retryDelayMs"` Must be an integer type. Sets the approximate amount of
+      delay between retries.
     - `"symbolURLs"` A list of strings, each specifying a URL from which symbols
       can be requested. Symbol files will be requested from each URL at
       `<url>/<module>/<breakpadId>/<symbol filename>`.

@@ -514,11 +514,10 @@ class LRUCache:
         self.cache[path] = newEntry
 
         while self.size > self.maxSize:
-            oldestKey = self.cache.keys()[0]
-            oldestEntry = self.cache[oldestKey]
+            oldestKey, oldestEntry = self.cache.items()[0]
             if oldestEntry is newEntry:
                 break
-            self.evict(oldestEntry.path)
+            self.evict(oldestKey)
 
     def evict(self, key):
         if key not in self.cache:

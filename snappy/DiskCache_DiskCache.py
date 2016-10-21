@@ -349,7 +349,8 @@ class DiskCacheThread(threading.Thread):
         ])
 
     def makeSymMap(self, data, libId):
-        symMap = {}
+        publicSymbols = {}
+        funcSymbols = {}
         lineNum = 0
         for line in data:
             lineNum += 1
@@ -363,7 +364,7 @@ class DiskCacheThread(threading.Thread):
                     continue
                 address = int(fields[1], 16)
                 symbol = fields[3]
-                symMap[address] = symbol
+                publicSymbols[address] = symbol
             elif line.startswith("FUNC "):
                 line = line.rstrip()
                 fields = line.split(" ", 4)
@@ -374,7 +375,11 @@ class DiskCacheThread(threading.Thread):
                     continue
                 address = int(fields[1], 16)
                 symbol = fields[4]
-                symMap[address] = symbol
+                funcSymbols[address] = symbol
+        # Prioritize PUBLIC symbols over FUNC ones
+        symMap = funcSymbols
+        symMap.update(publicSymbols)
+
         sortedAddresses = sorted(symMap.keys(), reverse=True)
         symmapString = "DiskCache v.1\n"
         for address in sortedAddresses:

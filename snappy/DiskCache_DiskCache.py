@@ -14,6 +14,7 @@ from StringIO import StringIO
 import gzip
 import zlib
 import time
+import collections
 
 
 class DiskCache:
@@ -485,102 +486,45 @@ class DiskCacheThread(threading.Thread):
 
 class LRUCache:
     def __init__(self):
-        self.cache = {}
-        self.oldestEntry = None
-        self.newestEntry = None
+        self.cache = collections.OrderedDict()
         self.size = 0
         self.maxSize = config['maxSizeMB'] * 1024 * 1024
-
-    def iterator(self, newestFirst=True):
-        if newestFirst:
-            current = self.oldestEntry
-            while current:
-                yield current
-                current = current.newer
-        else:
-            current = self.newestEntry
-            while current:
-                yield current
-                current = current.older
-
-    # For testing/logging
-    def toString(self, newestFirst=True):
-        output = "["
-        firstEntry = True
-        for entry in self.iterator(newestFirst):
-            if firstEntry:
-                firstEntry = False
-            else:
-                output += ", "
-            output += os.path.relpath(entry.path, config['cachePath'])
-        output += "]"
-        return output
 
     def retrieve(self, key):
         if key not in self.cache:
             return None
         entry = self.cache[key]
-        if entry is not self.newestEntry:
-            if entry is self.oldestEntry:
-                self.oldestEntry = entry.newer
-            # Detatch entry from list
-            if entry.older:
-                entry.older.newer = entry.newer
-            if entry.newer:
-                entry.newer.older = entry.older
-            # Put entry at the end of the list
-            entry.newer = None
-            entry.older = self.newestEntry
-            self.newestEntry = entry
+
+        # Mark this entry as the "most recently used" by moving it to the end of
+        # the ordered dictionary
+        del self.cache[key]
+        self.cache[key] = entry
+
         return entry
 
     def add(self, path):
         logger.log(logLevel.DEBUG, "Adding {} to cache".format(path))
+        if path in self.cache:
+            logger.log(logLevel.WARNING, "Path: {} is already in the cache".format(path))
+            self.retrieve(path)
+            return
+
         newEntry = CacheEntry(path)
-        newEntry.older = self.newestEntry
-        if self.newestEntry:
-            self.newestEntry.newer = newEntry
-        self.newestEntry = newEntry
-        if not self.oldestEntry:
-            self.oldestEntry = newEntry
         self.size += newEntry.size
         self.cache[path] = newEntry
-        while self.size > self.maxSize and newEntry is not self.oldestEntry:
-            self.evictOldest()
 
-    def evictOldest(self):
-        if not self.oldestEntry:
-            return
-        toEvict = self.oldestEntry
-        logger.log(logLevel.DEBUG, "Evicting {} from the cache (cache size = {})"
-                   .format(toEvict.path, self.size))
-        self.oldestEntry = toEvict.newer
-        if self.oldestEntry:
-            self.oldestEntry.older = None
-        else:
-            self.newestEntry = None
-        del self.cache[toEvict.path]
-        self.size -= toEvict.size
-        try:
-            os.remove(toEvict.path)
-        except:
-            logger.log(logLevel.ERROR, "Unable to delete file evicted from cache: {}"
-                       .format(toEvict.path))
+        while self.size > self.maxSize:
+            oldestKey, oldestEntry = self.cache.items()[0]
+            if oldestEntry is newEntry:
+                break
+            self.evict(oldestKey)
 
     def evict(self, key):
         if key not in self.cache:
             return
         toEvict = self.cache[key]
         logger.log(logLevel.DEBUG,
-                   "Evicting {} from the cache by request".format(toEvict.path))
-        if toEvict is self.oldestEntry:
-            self.oldestEntry = toEvict.newer
-            if self.oldestEntry:
-                self.oldestEntry.older = None
-        if toEvict is self.newestEntry:
-            self.newestEntry = toEvict.older
-            if self.newestEntry:
-                self.newestEntry.newer = None
+                   "Evicting {} from the cache".format(toEvict.path))
         del self.cache[toEvict.path]
         self.size -= toEvict.size
         try:
@@ -594,7 +538,5 @@ class CacheEntry:
     def __init__(self, path):
         self.path = path
         self.size = os.path.getsize(path)
-        self.older = None  # prev pointer
-        self.newer = None  # next pointer
 
 diskCache = DiskCache()

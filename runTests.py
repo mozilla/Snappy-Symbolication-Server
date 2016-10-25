@@ -43,8 +43,9 @@ def runTests(configPath=None, useOldConfig=False, runTests=True):
     if runTests:
         testLoader = unittest.defaultTestLoader.discover(TEST_DIR)
         testRunner = unittest.TextTestRunner()
-        return testRunner.run(testLoader)
+        return testRunner.run(testLoader).wasSuccessful
     return 0
 
 if __name__ == '__main__':
-    sys.exit(main())
+    success = main()
+    sys.exit(int(not success))

@@ -31,7 +31,7 @@ def main():
                         "helpful if you want to run tests individually. With --oldConfig, this "
                         "does nothing.")
     args = parser.parse_args()
-    runTests(args.config, bool(args.oldConfig), not bool(args.noRun))
+    return runTests(args.config, bool(args.oldConfig), not bool(args.noRun))
 
 
 def runTests(configPath=None, useOldConfig=False, runTests=True):
@@ -43,7 +43,8 @@ def runTests(configPath=None, useOldConfig=False, runTests=True):
     if runTests:
         testLoader = unittest.defaultTestLoader.discover(TEST_DIR)
         testRunner = unittest.TextTestRunner()
-        testRunner.run(testLoader)
+        return testRunner.run(testLoader)
+    return 0
 
 if __name__ == '__main__':
     sys.exit(main())

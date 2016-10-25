@@ -545,7 +545,7 @@ class LRUCache:
             except OSError as ex:
                 if ex.errno == errno.ENOTEMPTY:
                     return
-                raise ex
+                raise
             directory = os.path.dirname(directory)
 
 

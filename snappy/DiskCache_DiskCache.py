@@ -548,6 +548,7 @@ class LRUCache:
                 raise ex
             directory = os.path.dirname(directory)
 
+
 class CacheEntry:
     def __init__(self, path):
         self.path = path

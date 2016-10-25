@@ -15,6 +15,7 @@ import gzip
 import zlib
 import time
 import collections
+import errno
 
 
 class DiskCache:
@@ -532,6 +533,20 @@ class LRUCache:
         except:
             logger.log(logLevel.ERROR, "Unable to delete file evicted from cache: {}"
                        .format(toEvict.path))
+        self.removeEmptyCacheDirs(os.path.dirname(toEvict.path))
+
+    def removeEmptyCacheDirs(self, directory):
+        while directory != config['cachePath']:
+            # Going for the "easier to ask for forgiveness than permission" model:
+            # Try to remove directory. Check afterwards to see if there was an
+            # error indicating that the directory was not empty
+            try:
+                os.rmdir(directory)
+            except OSError as ex:
+                if ex.errno == errno.ENOTEMPTY:
+                    return
+                raise
+            directory = os.path.dirname(directory)
 
 
 class CacheEntry:

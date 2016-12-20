@@ -309,7 +309,10 @@ Tests
 
 The Symbolication Server includes its own tests. There are two options for
 running tests. `python runTests.py` runs all tests.
-`python tests/test_[name].py` runs just one test.
+`python tests/test_[name].py` runs just one test. These test scripts expect to
+be able to start Snappy using quickstart without Docker, so be sure to follow
+the setup instructions listed in
+[Quick Start without Docker](#quick-start-without-docker).
 
 There is also the capability to use a certain configuration for testing. This is
 done by passing a configuration file to the runTests script with

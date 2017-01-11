@@ -18,7 +18,6 @@ import collections
 import errno
 import sqlite3
 import datetime
-import functools
 
 CACHE_DB_FILENAME = "cache.sqlite"
 EPOCH = datetime.datetime.utcfromtimestamp(0)
@@ -616,7 +615,7 @@ class LRUCache:
             # To complicate things, however, we want evictions (if necessary),
             # to be their own transactions. We don't want to roll back the
             # evictions if the addition fails (since the files are gone).
-            with self.transaction() as transaction:
+            with self.transaction():
                 currentSize = self.size()
 
                 if currentSize + dataSize <= self.maxSize:
@@ -625,7 +624,6 @@ class LRUCache:
                                             "VALUES (?, ?, ?);",
                                             (path, dataSize, self.timestamp()))
                     except sqlite3.IntegrityError:
-                        # If the key is already in the cache, we might 
                         raise self.KeyConflict("That key (path) is already in the cache")
 
                     try:
@@ -671,7 +669,7 @@ class LRUCache:
         return toEvict
 
     def evict(self, path):
-        with self.transaction() as transaction:
+        with self.transaction():
             result = self.cursor.execute("DELETE FROM cache WHERE path=?;", (path,))
             if result.rowcount == 0:
                 raise self.NoSuchKey("Path not in cache")
@@ -695,7 +693,8 @@ class LRUCache:
             # to remove files will result in the DiskCache filling up with files
             # that are not tracked by the cache.
             ex_type, ex, tb = sys.exc_info()
-            logger.log(logLevel.ERROR, "Unable to remove file: {} - {} - {}".format(path, ex_type, e))
+            logger.log(logLevel.ERROR, "Unable to remove file: {} - {} - {}"
+                                       .format(path, ex_type, e))
             raise
 
         directory = os.path.dirname(path)

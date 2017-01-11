@@ -3,7 +3,7 @@ from logger import logLevel
 import json
 
 
-def validateRequest(remoteIP, data, logger):
+def validateRequest(debugAllowed, data, logger):
     try:
         request = json.loads(data)
     except ValueError:
@@ -15,9 +15,10 @@ def validateRequest(remoteIP, data, logger):
         return None
 
     # Check if this is a debug request
-    debugRequest = validateDebugRequest(remoteIP, request, logger)
-    if debugRequest:
-        return debugRequest
+    if debugAllowed:
+        debugRequest = validateDebugRequest(request, logger)
+        if debugRequest:
+            return debugRequest
 
     if "stacks" not in request:
         logger(logLevel.DEBUG, "Request does not contain 'stacks'")
@@ -84,12 +85,10 @@ def validateRequest(remoteIP, data, logger):
         return request
 
 
-def validateDebugRequest(remoteIP, request, logger):
+def validateDebugRequest(request, logger):
     # Validation for debug requests is a bit less strict, but MUST come from the
-    # localhost
-    if remoteIP != "127.0.0.1":
-        return None
-
+    # localhost. If this function is called, it is assumed that the request has
+    # been verified as coming from localhost.
     if 'debug' not in request:
         return None
 

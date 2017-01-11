@@ -14,6 +14,7 @@ class RequestHandler(tornado.web.RequestHandler):
         xForwardIP = self.request.headers.get("X-Forwarded-For")
         self.remoteIP = self.request.remote_ip if not xForwardIP else xForwardIP
         self.requestId = uuid.uuid4()
+        self.debugAllowed = (self.request.remote_ip == "127.0.0.1")
 
     def log(self, level, message):
         logger.log(level, "{} {}".format(self.requestId, message), remoteIP=self.remoteIP)
@@ -22,33 +23,44 @@ class RequestHandler(tornado.web.RequestHandler):
         self.set_status(code)
         self.set_header("Content-type", "application/json")
 
-    def head(self):
+    def head(self, path):
         uri = self.request.uri
         self.log(logLevel.INFO, "Cannot process HEAD request: {}".format(uri))
         self.sendHeaders(405)
 
-    def get(self):
-        uri = self.request.uri
-        self.log(logLevel.INFO, "Cannot process GET request: {}".format(uri))
-        self.sendHeaders(405)
+    @tornado.gen.coroutine
+    def get(self, path):
+        if path == "/__lbheartbeat__":
+            self.sendHeaders(200)
+            return
+        elif path == "/__heartbeat__":
+            # Translate this to a debug request, which the server already has a
+            # mechanism for handling. Then feed it in as if it was a POST
+            # request.
+            self.debugAllowed = True
+            self.request.body = r'{"debug": true, "action": "heartbeat"}'
+            yield self.post(path)
+            return
+        # Fall through
+        self.sendHeaders(404)
 
-    def delete(self):
+    def delete(self, path):
         uri = self.request.uri
         self.log(logLevel.INFO, "Cannot process DELETE request: {}".format(uri))
         self.sendHeaders(405)
 
-    def patch(self):
+    def patch(self, path):
         uri = self.request.uri
         self.log(logLevel.INFO, "Cannot process PATCH request: {}".format(uri))
         self.sendHeaders(405)
 
-    def put(self):
+    def put(self, path):
         uri = self.request.uri
         self.log(logLevel.INFO, "Cannot process PUT request: {}".format(uri))
         self.sendHeaders(405)
 
     @tornado.gen.coroutine
-    def post(self):
+    def post(self, path):
         uri = self.request.uri
 
         self.log(logLevel.INFO, "Processing POST request: {}".format(uri))
@@ -57,7 +69,7 @@ class RequestHandler(tornado.web.RequestHandler):
             requestBody = self.request.body
             self.log(logLevel.DEBUG, "Request body: {}".format(requestBody))
 
-            requestBody = validateRequest(self.request.remote_ip, requestBody, self.log)
+            requestBody = validateRequest(self.debugAllowed, requestBody, self.log)
             if not requestBody:
                 self.log(logLevel.ERROR, "Unable to validate request body")
                 self.sendHeaders(400)

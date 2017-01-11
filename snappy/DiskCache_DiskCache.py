@@ -16,6 +16,16 @@ import zlib
 import time
 import collections
 import errno
+import sqlite3
+import datetime
+import functools
+
+CACHE_DB_FILENAME = "cache.sqlite"
+EPOCH = datetime.datetime.utcfromtimestamp(0)
+CACHE_SIZE_BUFFER = 1024 * 1024  # 1 Megabyte
+
+# CacheEntry fields must be in the same order as the SQL table backing it
+CacheEntry = collections.namedtuple("CacheEntry", "path size timestamp readers")
 
 
 class DiskCache:
@@ -76,15 +86,7 @@ class DiskCacheThread(threading.Thread):
             os.makedirs(config['cachePath'])
         self.symbolURLs = config['symbolURLs']
         self.cache = LRUCache()
-        self.loadCache()
         self.loadStaticCache()
-
-    def loadCache(self):
-        cacheDir = config['cachePath']
-        for root, dirs, files in os.walk(cacheDir):
-            for file in files:
-                path = os.path.join(root, file)
-                self.cache.add(path)
 
     def loadStaticCache(self):
         # Load from directories in reverse order so that directories listed earlier
@@ -175,13 +177,22 @@ class DiskCacheThread(threading.Thread):
             if not offsets:
                 continue
 
-            # Get symbol file from cache or add it to the cache
-            path = self.getFile(libName, breakpadId)
-            if not path:
-                # Hmm. Looks like we couldn't get these symbols.
-                continue
+            symbolFilename = self.getSymbolFileName(libName)
+            relPath = self.getSymbolFileRelPath(libName, breakpadId, symbolFilename)
 
-            symbols = self.getSymbols(path, offsets)
+            if relPath in self.staticCache:
+                path = self.staticCache[relPath]
+                symbols = self.getSymbols(path, offsets, inCache=False)
+            else:
+                path = os.path.join(config['cachePath'], relPath)
+                try:
+                    symbols = self.getSymbols(path, offsets, inCache=True)
+                except LRUCache.NoSuchKey:
+                    # Symbol file needs to be downloaded
+                    if not self.downloadToCache(libName, breakpadId, symbolFilename, path):
+                        continue  # Unable to download
+                    symbols = self.getSymbols(path, offsets, inCache=True)
+
             for workIndex, stackIndex, frameIndex, moduleIndex, frameOffset in frameIndicies:
                 if frameOffset not in symbols:
                     continue
@@ -225,25 +236,6 @@ class DiskCacheThread(threading.Thread):
                         offsets.add(frameOffset)
         return frameIndicies, list(offsets)
 
-    # If the file is in the cache, its path is returned. Otherwise the file is
-    # added to the cache.
-    def getFile(self, libName, breakpadId):
-        symbolFilename = self.getSymbolFileName(libName)
-        relPath = self.getSymbolFileRelPath(libName, breakpadId, symbolFilename)
-
-        cachePath = os.path.join(config['cachePath'], relPath)
-        cacheResult = self.cache.retrieve(cachePath)
-        if cacheResult:
-            return cachePath
-
-        if relPath in self.staticCache:
-            return self.staticCache[relPath]
-
-        if self.downloadToCache(libName, breakpadId, symbolFilename, cachePath):
-            return cachePath
-
-        return None
-
     def getSymbolFileName(self, libName):
         if libName.endswith(".pdb"):
             return libName[:-4] + ".sym"
@@ -262,16 +254,8 @@ class DiskCacheThread(threading.Thread):
             libId = "{}/{}/{}".format(libName, breakpadId, symbolFilename)
             data = data.splitlines()
             data = self.makeSymMap(data, libId)
-        try:
-            destDir = os.path.dirname(destPath)
-            if not os.path.exists(destDir):
-                os.makedirs(destDir)
-            with open(destPath, 'wb') as fp:
-                fp.write(data)
-        except (OSError, IOError) as e:
-            logger.log(logLevel.ERROR, "Failed to write file {}: {}".format(destPath, e))
-            return False
-        self.cache.add(destPath)
+
+        self.cache.add(destPath, data)
         return True
 
     def retrieveFile(self, libName, breakpadId, symbolFilename):
@@ -387,66 +371,22 @@ class DiskCacheThread(threading.Thread):
             symmapString += "{} {}\n".format(hex(address), symMap[address])
         return symmapString
 
-    def getSymbols(self, path, offsets):
+    def getSymbols(self, path, offsets, inCache):
         if not offsets:
             return {}
         symbols = {}
         try:
-            with open(path, 'r') as symFile:
-                firstLine = symFile.next().rstrip()
-                if firstLine == "DiskCache v.1":
-                    # Special DiskCache symbol file
-                    offsets.sort(reverse=True)
-                    nextOffset = offsets.pop(0)
-
-                    for line in symFile:
-                        line = line.rstrip()
-                        address, symbol = line.split(" ", 1)
-                        address = int(address, 16)
-                        while address <= nextOffset:
-                            symbols[nextOffset] = symbol
-                            if not offsets:
-                                return symbols
-                            nextOffset = offsets.pop(0)
-                elif firstLine.startswith("MODULE "):
-                    # Regular symbol file
-                    offsets = [[o, None] for o in offsets]
-                    lineNum = 1
-                    for line in symFile:
-                        lineNum += 1
-                        if line.startswith("PUBLIC "):
-                            line = line.rstrip()
-                            fields = line.split(" ", 3)
-                            if len(fields) < 4:
-                                logger.log(logLevel.WARNING,
-                                           "PUBLIC line {} in {} has too few fields"
-                                           .format(lineNum, path))
-                                continue
-                            address = int(fields[1], 16)
-                            symbol = fields[3]
-                            for index in xrange(len(offsets)):
-                                offset, closest = offsets[index]
-                                if address <= offset and (closest is None or address > closest):
-                                    offsets[index] = [offset, address]
-                                    symbols[offset] = symbol
-                        elif line.startswith("FUNC "):
-                            line = line.rstrip()
-                            fields = line.split(" ", 4)
-                            if len(fields) < 5:
-                                logger.log(logLevel.WARNING,
-                                           "FUNC line {} in {} has too few fields"
-                                           .format(lineNum, path))
-                                continue
-                            address = int(fields[1], 16)
-                            symbol = fields[4]
-                            for index in xrange(len(offsets)):
-                                offset, closest = offsets[index]
-                                if address <= offset and (closest is None or address > closest):
-                                    offsets[index] = [offset, address]
-                                    symbols[offset] = symbol
-                else:
-                    logger.log(logLevel.ERROR,
-                               "Unrecognizable type of symbol file {}".format(path))
+            if inCache:
+                with self.cache.fileOpen(path) as symFile:
+                    self.readSymbols(path, offsets, symbols, symFile)
+            else:
+                with open(path, "r") as symFile:
+                    self.readSymbols(path, offsets, symbols, symFile)
+        except LRUCache.NoSuchKey:
+            # Allow NoSuchKey to propagate. All other exceptions should be
+            # caught so that if something goes wrong, we fail to symbolicate
+            # this frame rather than the whole request.
+            raise
         except Exception as e:
             ex_type, ex, tb = sys.exc_info()
             stack = traceback.extract_tb(tb)
@@ -454,6 +394,62 @@ class DiskCacheThread(threading.Thread):
                        "Exception when reading symbols from {}: {} STACK: {}"
                        .format(path, e, stack))
         return symbols
+
+    def readSymbols(self, path, offsets, symbols, stream):
+        firstLine = stream.next().rstrip()
+        if firstLine == "DiskCache v.1":
+            # Special DiskCache symbol file
+            offsets.sort(reverse=True)
+            nextOffset = offsets.pop(0)
+
+            for line in stream:
+                line = line.rstrip()
+                address, symbol = line.split(" ", 1)
+                address = int(address, 16)
+                while address <= nextOffset:
+                    symbols[nextOffset] = symbol
+                    if not offsets:
+                        return
+                    nextOffset = offsets.pop(0)
+        elif firstLine.startswith("MODULE "):
+            # Regular symbol file
+            offsets = [[o, None] for o in offsets]
+            lineNum = 1
+            for line in stream:
+                lineNum += 1
+                if line.startswith("PUBLIC "):
+                    line = line.rstrip()
+                    fields = line.split(" ", 3)
+                    if len(fields) < 4:
+                        logger.log(logLevel.WARNING,
+                                   "PUBLIC line {} in {} has too few fields"
+                                   .format(lineNum, path))
+                        continue
+                    address = int(fields[1], 16)
+                    symbol = fields[3]
+                    for index in xrange(len(offsets)):
+                        offset, closest = offsets[index]
+                        if address <= offset and (closest is None or address > closest):
+                            offsets[index] = [offset, address]
+                            symbols[offset] = symbol
+                elif line.startswith("FUNC "):
+                    line = line.rstrip()
+                    fields = line.split(" ", 4)
+                    if len(fields) < 5:
+                        logger.log(logLevel.WARNING,
+                                   "FUNC line {} in {} has too few fields"
+                                   .format(lineNum, path))
+                        continue
+                    address = int(fields[1], 16)
+                    symbol = fields[4]
+                    for index in xrange(len(offsets)):
+                        offset, closest = offsets[index]
+                        if address <= offset and (closest is None or address > closest):
+                            offsets[index] = [offset, address]
+                            symbols[offset] = symbol
+        else:
+            logger.log(logLevel.ERROR,
+                       "Unrecognizable type of symbol file {}".format(path))
 
     # Carries out the debug action specified by the first request in the work
     # queue.
@@ -470,20 +466,43 @@ class DiskCacheThread(threading.Thread):
             relPath = self.getSymbolFileRelPath(libName, breakpadId, symbolFilename)
             cachePath = os.path.join(config['cachePath'], relPath)
 
-        if action == "cacheAddRaw":
-            self.cache.evict(cachePath)
+        if action == "heartbeat":
+            self.cache.touch()
+        elif action == "cacheAddRaw":
+            try:
+                self.cache.evict(cachePath)
+            except LRUCache.NoSuchKey:
+                pass
+
             if self.downloadToCache(libName, breakpadId, symbolFilename, cachePath,
                                     saveRaw=True):
                 response['path'] = cachePath
             else:
                 response['path'] = None
         elif action == "cacheGet":
-            response['path'] = self.getFile(libName, breakpadId)
+            if relPath in self.staticCache:
+                response['path'] = self.staticCache[relPath]
+            else:
+                try:
+                    self.cache.touchEntry(cachePath)
+                    response['path'] = cachePath
+                except LRUCache.NoSuchKey:
+                    if self.downloadToCache(libName, breakpadId, symbolFilename, cachePath):
+                        response['path'] = cachePath
+                    else:
+                        response['path'] = None
         elif action == "cacheEvict":
             self.cache.evict(cachePath)
             response['success'] = True
         elif action == "cacheExists":
-            response['exists'] = (self.cache.retrieve(cachePath) is not None)
+            if relPath in self.staticCache:
+                response['exists'] = True
+            else:
+                try:
+                    self.cache.touchEntry(cachePath)
+                    response['exists'] = True
+                except LRUCache.NoSuchKey:
+                    response['exists'] = False
         else:
             logger.log(logLevel.ERROR, "{} Invalid action: {}".format(id, action))
             response['message'] = "Invalid action"
@@ -491,60 +510,196 @@ class DiskCacheThread(threading.Thread):
 
 
 class LRUCache:
+    class NoSuchKey(KeyError):
+        pass
+
+    class KeyConflict(KeyError):
+        pass
+
     def __init__(self):
-        self.cache = collections.OrderedDict()
-        self.size = 0
         self.maxSize = config['maxSizeMB'] * 1024 * 1024
+        self.path = os.path.join(config['cachePath'], CACHE_DB_FILENAME)
+        self.connection = sqlite3.connect(self.path)
+        self.cursor = self.connection.cursor()
+        self.blockSize = os.statvfs(self.path).f_bsize  # This line only works in Unix systems
 
-    def retrieve(self, key):
-        if key not in self.cache:
-            return None
-        entry = self.cache[key]
+        with self.transaction():
+            # Fields must be in the same order as the namedtuple: CacheEntry
+            self.cursor.execute("CREATE TABLE IF NOT EXISTS cache "
+                                "("
+                                "      path      TEXT    NOT NULL"
+                                "    , size      INTEGER NOT NULL"
+                                "    , timestamp INTEGER NOT NULL "
+                                "    , readers   INTEGER NOT NULL DEFAULT 0"
+                                "    , PRIMARY KEY (path)"
+                                ");")
 
-        # Mark this entry as the "most recently used" by moving it to the end of
-        # the ordered dictionary
-        del self.cache[key]
-        self.cache[key] = entry
-
-        return entry
-
-    def add(self, path):
-        logger.log(logLevel.DEBUG, "Adding {} to cache".format(path))
-        if path in self.cache:
-            logger.log(logLevel.WARNING, "Path: {} is already in the cache".format(path))
-            self.retrieve(path)
-            return
-
-        newEntry = CacheEntry(path)
-        self.size += newEntry.size
-        self.cache[path] = newEntry
-
-        while self.size > self.maxSize:
-            oldestKey, oldestEntry = self.cache.items()[0]
-            if oldestEntry is newEntry:
-                break
-            self.evict(oldestKey)
-
-    def evict(self, key):
-        if key not in self.cache:
-            return
-        toEvict = self.cache[key]
-        logger.log(logLevel.DEBUG,
-                   "Evicting {} from the cache".format(toEvict.path))
-        del self.cache[toEvict.path]
-        self.size -= toEvict.size
+    @contextlib.contextmanager
+    def transaction(self):
+        # NOTE: Transactions within transactions are NOT SUPPORTED
+        self.cursor.execute("BEGIN TRANSACTION;")
         try:
-            os.remove(toEvict.path)
+            yield
+            self.connection.commit()
         except:
-            logger.log(logLevel.ERROR, "Unable to delete file evicted from cache: {}"
-                       .format(toEvict.path))
-        self.removeEmptyCacheDirs(os.path.dirname(toEvict.path))
+            self.connection.rollback()
+            raise
 
-    def removeEmptyCacheDirs(self, directory):
-        while directory != config['cachePath']:
-            # Going for the "easier to ask for forgiveness than permission" model:
-            # Try to remove directory. Check afterwards to see if there was an
-            # error indicating that the directory was not empty
+    @contextlib.contextmanager
+    def fileOpen(self, path):
+        """ This function should ALWAYS be used when accessing files in the
+        cache.
+        """
+        with self.transaction():
+            result = self.cursor.execute("UPDATE cache "
+                                         "SET readers=readers+1 "
+                                         "WHERE path=?;", (path, ))
+        if result.rowcount == 0:
+            raise self.NoSuchKey("Path not in cache")
+
+        try:
+            with open(path, "r") as f:
+                yield f
+        except (IOError, OSError) as e:
+            ex_type, ex, tb = sys.exc_info()
+            logger.log(logLevel.ERROR, "Unable to read cache file: {} - {} - {}"
+                                       .format(path, ex_type, e))
+            # Likely this file was deleted externally without being evicted from
+            # the cache. The sanest thing to do is to just evict it now since
+            # it is effectively no longer in the cache.
+            self.evict(path)
+            raise self.NoSuchKey("Path not in cache")
+        finally:
+            with self.transaction():
+                self.cursor.execute("UPDATE cache "
+                                    "SET readers=readers-1 "
+                                    "  , timestamp=? "
+                                    "WHERE path=?", (self.timestamp(), path))
+
+    def touchEntry(self, path):
+        with self.transaction():
+            result = self.cursor.execute("UPDATE cache "
+                                         "SET timestamp=? "
+                                         "WHERE path=?;", (self.timestamp(), path))
+        if result.rowcount == 0:
+            raise self.NoSuchKey("Path not in cache")
+
+    def touch(self):
+        """ Makes sure that the cache is available. Should raise an exception if
+        it is not.
+        """
+        self.size()
+
+    def logicalSizeToDiskSize(self, logicalSize):
+        blocks = (logicalSize - 1) / self.blockSize + 1
+        return blocks * self.blockSize
+
+    def size(self):
+        dataSize = self.cursor.execute("SELECT SUM(size) FROM cache;").fetchone()[0]
+        if dataSize is None:
+            dataSize = 0
+        cacheSize = self.logicalSizeToDiskSize(os.path.getsize(self.path))
+        totalSize = dataSize + cacheSize
+        # Add an arbitrary buffer so that we can ignore changes to the size of
+        # the database file and just assume that a single transaction will not
+        # increase its size by more than that. A bit hacky, but easier than
+        # trying to predict the size changes of the database.
+        totalSize += CACHE_SIZE_BUFFER
+        return totalSize
+
+    def add(self, path, data):
+        dataSize = self.logicalSizeToDiskSize(len(bytearray(data)))
+
+        while True:
+            # We want the size request and addition to be in the same
+            # transaction to prevent race conditions.
+            # To complicate things, however, we want evictions (if necessary),
+            # to be their own transactions. We don't want to roll back the
+            # evictions if the addition fails (since the files are gone).
+            with self.transaction() as transaction:
+                currentSize = self.size()
+
+                if currentSize + dataSize <= self.maxSize:
+                    try:
+                        self.cursor.execute("INSERT INTO cache (path, size, timestamp) "
+                                            "VALUES (?, ?, ?);",
+                                            (path, dataSize, self.timestamp()))
+                    except sqlite3.IntegrityError:
+                        # If the key is already in the cache, we might 
+                        raise self.KeyConflict("That key (path) is already in the cache")
+
+                    try:
+                        destDir = os.path.dirname(path)
+                        if not os.path.exists(destDir):
+                            os.makedirs(destDir)
+                        with open(path, "w") as f:
+                            f.write(data)
+                    except:
+                        # On failure, try to clean up, then re-raise
+                        ex_type, ex, tb = sys.exc_info()
+                        try:
+                            self.removeCacheFile(path)
+                        except:
+                            pass
+                        raise ex_type, ex, tb
+                    return
+
+            while currentSize + dataSize > self.maxSize:
+                evicted = self.evictOldest()
+                if evicted is None:
+                    raise IOError("Unable to free enough room for new cache file")
+                currentSize -= evicted.size
+
+    def evictOldest(self):
+        with self.transaction():
+            result = self.cursor.execute("SELECT * FROM cache "
+                                         "WHERE readers=0 "
+                                         "ORDER BY timestamp ASC "
+                                         "LIMIT 1;").fetchone()
+            if result is None:
+                return None
+
+            toEvict = CacheEntry(*result)
+            self.cursor.execute("DELETE FROM cache WHERE path=?;", (toEvict.path,))
+            try:
+                self.removeCacheFile(toEvict.path)
+            except:
+                # If this fails, unfortunately, there is not much to be done
+                # about it. Most likely, the file already doesn't exist, so
+                # just commit the transaction and carry on.
+                pass
+        return toEvict
+
+    def evict(self, path):
+        with self.transaction() as transaction:
+            result = self.cursor.execute("DELETE FROM cache WHERE path=?;", (path,))
+            if result.rowcount == 0:
+                raise self.NoSuchKey("Path not in cache")
+            try:
+                self.removeCacheFile(path)
+            except:
+                # If this fails, unfortunately, there is not much to be done
+                # about it. Most likely, the file already doesn't exist, so
+                # just commit the transaction and carry on.
+                pass
+
+    def timestamp(self):
+        now = datetime.datetime.utcnow()
+        return (now - EPOCH).total_seconds()
+
+    def removeCacheFile(self, path):
+        try:
+            os.remove(path)
+        except Exception as e:
+            # Make very sure that this gets logged by catching `Exception`. Failure
+            # to remove files will result in the DiskCache filling up with files
+            # that are not tracked by the cache.
+            ex_type, ex, tb = sys.exc_info()
+            logger.log(logLevel.ERROR, "Unable to remove file: {} - {} - {}".format(path, ex_type, e))
+            raise
+
+        directory = os.path.dirname(path)
+        while directory != config["cachePath"]:
             try:
                 os.rmdir(directory)
             except OSError as ex:
@@ -553,10 +708,5 @@ class LRUCache:
                 raise
             directory = os.path.dirname(directory)
 
-
-class CacheEntry:
-    def __init__(self, path):
-        self.path = path
-        self.size = os.path.getsize(path)
 
 diskCache = DiskCache()

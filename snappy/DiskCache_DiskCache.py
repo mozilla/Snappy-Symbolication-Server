@@ -515,6 +515,9 @@ class LRUCache:
     class KeyConflict(KeyError):
         pass
 
+    class LockedError(Exception):
+        pass
+
     def __init__(self):
         self.maxSize = config['maxSizeMB'] * 1024 * 1024
         self.path = os.path.join(config['cachePath'], CACHE_DB_FILENAME)
@@ -670,9 +673,18 @@ class LRUCache:
 
     def evict(self, path):
         with self.transaction():
-            result = self.cursor.execute("DELETE FROM cache WHERE path=?;", (path,))
+
+            result = self.cursor.execute("DELETE FROM cache WHERE path=? AND readers=0;", (path,))
             if result.rowcount == 0:
-                raise self.NoSuchKey("Path not in cache")
+                # Determine the source of failure - Key doesn't exist or row locked
+                result = self.cursor.execute("SELECT * FROM cache WHERE path=?", (path,))
+                result = result.fetchone()
+                if result is None:
+                    raise self.NoSuchKey("Path not in cache")
+                entry = CacheEntry(*result)
+                if entry.readers > 0:
+                    raise self.LockedError("Cache entry has readers")
+                raise IOError("Unable to remove entry from cache")
             try:
                 self.removeCacheFile(path)
             except:

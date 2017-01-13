@@ -222,8 +222,11 @@ class SymbolicationThread(threading.Thread):
             val = self.memcache.get(SPECIAL_TEST_KEY)
             if val != SPECIAL_TEST_VALUE:
                 raise ValueError("Memcached test value is invalid")
-            if self.queryDiskCache(path="/__heartbeat__") is None:
+            self.response['memcached'] = True
+            diskCacheResponse = self.queryDiskCache(path="/__heartbeat__")
+            if diskCacheResponse is None:
                 raise IOError("Could not get heartbeat response from DiskCache")
+            self.response['DiskCache'] = diskCacheResponse
         elif action == "cacheEvict":
             self.memcache.delete(cacheId)
             self.log(logLevel.WARNING, "{} Cache item manually evicted: {}"

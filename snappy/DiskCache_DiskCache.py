@@ -467,6 +467,7 @@ class DiskCacheThread(threading.Thread):
 
         if action == "heartbeat":
             self.cache.touch()
+            response['database'] = True
         elif action == "cacheAddRaw":
             try:
                 self.cache.evict(cachePath)

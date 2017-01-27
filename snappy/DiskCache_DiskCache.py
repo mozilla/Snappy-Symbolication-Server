@@ -12,7 +12,6 @@ import urllib2
 import contextlib
 from StringIO import StringIO
 import gzip
-import zlib
 import time
 import collections
 import errno

@@ -336,8 +336,9 @@ class DiskCacheThread(threading.Thread):
                 try:
                     with gzip.GzipFile(fileobj=dataStream) as f:
                         return f.read()
-                except zlib.error:
-                    return dataStream.decode('zlib')
+                except EnvironmentError:
+                    dataStream.seek(0)
+                    return dataStream.read().decode('zlib')
         return response.read()
 
     def getSymbolURL(self, symbolURL, libName, breakpadId, fileName):

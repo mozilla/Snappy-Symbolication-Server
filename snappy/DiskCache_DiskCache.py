@@ -12,7 +12,6 @@ import urllib2
 import contextlib
 from StringIO import StringIO
 import gzip
-import zlib
 import time
 import collections
 import errno
@@ -336,8 +335,9 @@ class DiskCacheThread(threading.Thread):
                 try:
                     with gzip.GzipFile(fileobj=dataStream) as f:
                         return f.read()
-                except zlib.error:
-                    return dataStream.decode('zlib')
+                except EnvironmentError:
+                    dataStream.seek(0)
+                    return dataStream.read().decode('zlib')
         return response.read()
 
     def getSymbolURL(self, symbolURL, libName, breakpadId, fileName):

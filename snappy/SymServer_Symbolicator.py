@@ -154,6 +154,7 @@ class SymbolicationThread(threading.Thread):
                     # Need to add this module to the subRequest memory map
                     subRequestMemoryMap.append(module)
                     subRequestModuleIndex[module] = len(subRequestMemoryMap) - 1
+                    subRequestStack[subRequestIndex][0] = subRequestModuleIndex[module]
 
         if unresolvedFrames:
             self.log(logLevel.INFO, "{} frames in not in memcached"

@@ -143,7 +143,7 @@ class SymbolicationThread(threading.Thread):
                     continue
 
                 # Cache miss. Need to get the value from the DiskCache
-                subRequestStack.append(frame)
+                subRequestStack.append(frame[:])
                 subRequestIndex = len(subRequestStack) - 1
                 unresolvedFrames.append((stackIndex, frameIndex, moduleIndex, subRequestIndex))
                 if module not in subRequestModuleIndex:

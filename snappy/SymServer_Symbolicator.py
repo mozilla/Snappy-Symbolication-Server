@@ -146,15 +146,11 @@ class SymbolicationThread(threading.Thread):
                 subRequestStack.append(frame)
                 subRequestIndex = len(subRequestStack) - 1
                 unresolvedFrames.append((stackIndex, frameIndex, moduleIndex, subRequestIndex))
-                if module in subRequestModuleIndex:
-                    # This module is already in the subRequest. Just reference the
-                    # existing module
-                    subRequestStack[subRequestIndex][0] = subRequestModuleIndex[module]
-                else:
+                if module not in subRequestModuleIndex:
                     # Need to add this module to the subRequest memory map
                     subRequestMemoryMap.append(module)
                     subRequestModuleIndex[module] = len(subRequestMemoryMap) - 1
-                    subRequestStack[subRequestIndex][0] = subRequestModuleIndex[module]
+                subRequestStack[subRequestIndex][0] = subRequestModuleIndex[module]
 
         if unresolvedFrames:
             self.log(logLevel.INFO, "{} frames in not in memcached"

@@ -1,12 +1,14 @@
 Introduction
 ------------
 
-Provides a Web server for symbolicating Firefox stacks. It matches PC addresses
+Provides a Web server for symbolicating Firefox stacks. It matches function offsets
 to modules in memory and looks up the corresponding function names in
-server-side symbol files (.SYM files).
+server-side symbol files in [Breakpad's .sym format](https://chromium.googlesource.com/breakpad/breakpad/+/master/docs/symbol_files.md).
 
 This project is intended as a drop-in replacement for the old
-[Snappy Symbolication Server](https://github.com/mozilla/Snappy-Symbolication-Server/tree/e38f3fdd7b49ab181a95bd76bbd3a5f4fea97276)
+[Snappy Symbolication Server](https://github.com/mozilla/Snappy-Symbolication-Server/tree/e38f3fdd7b49ab181a95bd76bbd3a5f4fea97276).
+
+The canonical Mozilla instance of this server runs at `http://symbolapi.mozilla.org/`.
 
 Quick Start without Docker
 --------------------------
@@ -85,11 +87,21 @@ for testing:
 curl -d '{"stacks":[[[0,11723767],[1, 65802]]],"memoryMap":[["xul.pdb","44E4EC8C2F41492B9369D6B9A059577C2"],["wntdll.pdb","D74F79EB1F8D4A45ABCD2F476CCABACC2"]],"version":4}' 127.0.0.1:8080
 ```
 
+The request body must be a JSON object with the following three properties:
+* `version`: the version number of the request format as an integer. Currently `4`.
+* `stacks`: an array of stack traces. Each stack trace is an array of frames. Each frame is an array of two elements: `[module_index, module_offset]`. `module_index` is an index into the array in the `memoryMap` property as an integer. `module_offset` is the offset of this frame's instruction pointer relative to the base memory address of the module in which the code is contained as an integer.
+* `memoryMap`: an array of modules. Each module is an array of two strings: `[debug_file, debug_identifier]`. Fully describing these parameters is out of scope for this document, but they are the last two elements of the `MODULE` line of a symbol file, and they can be used to locate the matching symbol file.
+
 And the corresponding response:
 
 ```
 {"symbolicatedStacks": [["XREMain::XRE_mainRun() (in xul.pdb)", "KiUserCallbackDispatcher (in wntdll.pdb)"]], "knownModules": [true, true]}
 ```
+
+The response body is a JSON object with the following two properties:
+* `symbolicatedStacks`: an array of stack traces, matching the order of the entries of the `stacks` property in the request. Each stack trace is an array of strings containing the function name for this stack frame, if available.
+* `knownModules`: an array of booleans matching the order of the entries of the `memoryMap` property in the request. Each entry will be `true` if symbols were found for this module, and `false` otherwise.
+
 
 Note that while it is possible to run the SymServer without memcached, DiskCache
 is required for SymServer to operate properly.
@@ -294,7 +306,10 @@ Tests
 
 The Symbolication Server includes its own tests. There are two options for
 running tests. `python runTests.py` runs all tests.
-`python tests/test_[name].py` runs just one test.
+`python tests/test_[name].py` runs just one test. These test scripts expect to
+be able to start Snappy using quickstart without Docker, so be sure to follow
+the setup instructions listed in
+[Quick Start without Docker](#quick-start-without-docker).
 
 There is also the capability to use a certain configuration for testing. This is
 done by passing a configuration file to the runTests script with

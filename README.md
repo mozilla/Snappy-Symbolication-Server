@@ -1,3 +1,11 @@
+Status
+------
+
+The Snappy software has been deprecated in favor of [Tecken](https://github.com/mozilla-services/tecken). Tecken is what runs the symbols server at [symbols.mozilla.org](https://symbols.mozilla.org/).
+
+Please file any issues and pull requests there.
+
+
 Introduction
 ------------
 
@@ -8,7 +16,7 @@ server-side symbol files in [Breakpad's .sym format](https://chromium.googlesour
 This project is intended as a drop-in replacement for the old
 [Snappy Symbolication Server](https://github.com/mozilla/Snappy-Symbolication-Server/tree/e38f3fdd7b49ab181a95bd76bbd3a5f4fea97276).
 
-The canonical Mozilla instance of this server runs at `http://symbolapi.mozilla.org/`.
+The canonical Mozilla instance of this server runs at `https://symbolapi.mozilla.org/`.
 
 Quick Start without Docker
 --------------------------

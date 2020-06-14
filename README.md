@@ -71,23 +71,8 @@ DiskCache
 An LRU cache of symbolication files. On cache misses, the file is automatically
 retrieved and added to the cache.
 
-**Important:** The directory used for cache data (specified in the configuration
-as `DiskCache.cachePath`) must be used only for cache data. When DiskCache
-starts, it reads all files in the cache directory into the cache. If there is
-anything else in the cache path, it eventually will be evicted from the cache
-and deleted from the disk.
-
-**Also Important:** Do not delete anything from the cache while the DiskCache is
-running. Doing this will screw up the cache. If DiskCache files get deleted,
-restart the DiskCache server.
-
 SymServer communicates with the DiskCache with the same protocol used to
 make requests of SymServer.
-
-The DiskCache imposes a size limit specified by the configuration option
-`DiskCache.maxSizeMB`. However, the size limit is not strictly observed. When a
-file is added to the cache, it is saved to the cache directory BEFORE evicting
-enough cache items to bring the cache back under its maximum size.
 
 Symbol files can be fairly large. Currently xul.sym is 72MB. However, before
 being saved to the disk, the symbol data is processed to remove unnecessary data
@@ -422,6 +407,8 @@ property describes what the debug request does.
           (ex: "44E4EC8C2F41492B9369D6B9A059577C2").
     - Response properties:
         - `"exists"` Will be set to `true` if cache contains the file.
+- `"heartbeat"` Responds with HTTP 200 if all data backing sources are
+  accessible. Responds with HTTP 500 if not all data can be reached.
 
 **SymServer debug actions:**
 
@@ -444,3 +431,5 @@ property describes what the debug request does.
     - Response properties:
         - `"success"` Will be set to `true` if cache now does not contain the
           cache entry.
+- `"heartbeat"` Responds with HTTP 200 if all data backing sources are
+  accessible. Responds with HTTP 500 if not all data can be reached.

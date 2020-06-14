@@ -301,7 +301,7 @@ def serversResponding(config):
         port = getDiskCacheConfig(config)['port']
 
         while time.time() < timeoutEnd:
-            response = sendGetRequest(port)
+            response = requestHeartbeat(port)
             if response:
                 break
             time.sleep(POLL_TIME_SEC)
@@ -321,7 +321,7 @@ def serversResponding(config):
         port = getSymServerConfig(config)['port']
 
         while time.time() < timeoutEnd:
-            response = sendGetRequest(port)
+            response = requestHeartbeat(port)
             if response:
                 break
             time.sleep(POLL_TIME_SEC)
@@ -353,14 +353,12 @@ def serversResponding(config):
     return True
 
 
-def sendGetRequest(port):
+def requestHeartbeat(port):
     try:
-        request = urllib2.Request("http://127.0.0.1:{}".format(port))
+        request = urllib2.Request("http://127.0.0.1:{}/__heartbeat__".format(port))
         with contextlib.closing(urllib2.urlopen(request)) as response:
             return {'code': response.getcode(), 'data': response.read()}
-    except urllib2.HTTPError as err:
-        return {'code': err.code, 'data': None}
-    except urllib2.URLError:
+    except (urllib2.URLError, urllib2.HTTPError):
         return None
 
 

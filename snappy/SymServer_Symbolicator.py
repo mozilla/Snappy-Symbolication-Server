@@ -11,6 +11,9 @@ import urllib2
 import contextlib
 import traceback
 
+SPECIAL_TEST_KEY = "__symsever_special_value__"
+SPECIAL_TEST_VALUE = "1"
+
 
 class Symbolicator:
     def __init__(self):
@@ -23,6 +26,7 @@ class Symbolicator:
         self.initialized = True
         if config['memcachedServers']:
             self.memcache = memcache.Client(config['memcachedServers'], debug=0)
+            self.memcache.add(SPECIAL_TEST_KEY, SPECIAL_TEST_VALUE)
         else:
             self.memcache = None
 
@@ -185,11 +189,14 @@ class SymbolicationThread(threading.Thread):
             urllib.quote_plus(str(offset))
         ])
 
-    def queryDiskCache(self, requestData):
-        self.log(logLevel.DEBUG, "Sending request to DiskCache: {}".format(requestData))
+    def queryDiskCache(self, requestData=None, path=""):
+        url = config['DiskCacheServer'] + path
+        self.log(logLevel.DEBUG, "Sending request to DiskCache: url={} data={}"
+                 .format(url, requestData))
         try:
-            request = urllib2.Request(config['DiskCacheServer'])
-            request.add_data(json.dumps(requestData))
+            request = urllib2.Request(url)
+            if requestData:
+                request.add_data(json.dumps(requestData))
             with contextlib.closing(urllib2.urlopen(request)) as response:
                 if response.getcode() != 200:
                     self.log(logLevel.WARNING, "Got HTTP Code {} when querying DiskCache"
@@ -208,7 +215,16 @@ class SymbolicationThread(threading.Thread):
             cacheId = self.moduleOffsetId((request['libName'], request['breakpadId']),
                                           request['offset'])
 
-        if action == "cacheEvict":
+        if action == "heartbeat":
+            val = self.memcache.get(SPECIAL_TEST_KEY)
+            if val != SPECIAL_TEST_VALUE:
+                raise ValueError("Memcached test value is invalid")
+            self.response['memcached'] = True
+            diskCacheResponse = self.queryDiskCache(path="/__heartbeat__")
+            if diskCacheResponse is None:
+                raise IOError("Could not get heartbeat response from DiskCache")
+            self.response['DiskCache'] = diskCacheResponse
+        elif action == "cacheEvict":
             self.memcache.delete(cacheId)
             self.log(logLevel.WARNING, "{} Cache item manually evicted: {}"
                      .format(self.id, cacheId))

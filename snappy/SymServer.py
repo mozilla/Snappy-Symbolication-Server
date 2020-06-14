@@ -74,7 +74,7 @@ def runServer():
                      maxFiles=config["log"]["maxFiles"],
                      maxFileBytes=config["log"]["maxFileSizeMB"] * 1024 * 1024)
     logger.log(logLevel.INFO, "Configuration loaded: {}".format(config))
-    app = tornado.web.Application([(r"/", RequestHandler)])
+    app = tornado.web.Application([(r"(.*)", RequestHandler)])
     app.listen(config['port'])
     tornado.ioloop.IOLoop.current().start()
 
